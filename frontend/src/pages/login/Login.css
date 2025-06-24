@@ -1,0 +1,188 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  /* background: linear-gradient(135deg, #8e44ad, #3498db); */
+  background: #d3f9d8;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background-color 0.5s;
+}
+
+.container {
+  background: #fff;
+  width: 800px;
+  max-width: 95%;
+  display: flex;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 15px 25px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.5s;
+}
+
+.left {
+  flex: 1;
+  background: #4caf50;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  transition: background-color 0.5s ease;
+}
+
+.left img {
+  width: 100%;
+  max-width: 400px;
+}
+
+.manager-mode .left{
+  background: #ffffff;
+}
+
+.right {
+  flex: 1;
+  padding: 50px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background-color: #ffffff;
+  transition: background-color 0.5s;
+}
+
+.manager-mode .right {
+  background-color: #ffffff;
+}
+
+.right h2 {
+  margin-bottom: 30px;
+  font-size: 24px;
+  color: #ffffff;
+  transition: color 0.5s;
+}
+
+.manager-mode .right h2 {
+  color: #ffffff;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  background: #f2f2f2;
+  border-radius: 30px;
+  padding: 10px 20px;
+}
+
+.input-group input{
+  color:#333;
+}
+
+.input-group i {
+  margin-right: 10px;
+  color: #999;
+}
+
+.input-group input {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font-size: 16px;
+}
+
+button.login-btn {
+  background-color: #4caf50;
+  border: none;
+  color: white;
+  padding: 12px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 10px;
+  transition: all 0.3s;
+}
+
+.manager-mode button.login-btn {
+  background-color: #ffffff;
+  color: #4caf50;
+  border: 2px solid #4caf50;
+}
+
+button.login-btn:hover {
+  background-color: #43a047;
+  color: white;
+}
+
+.manager-mode button.login-btn:hover {
+  background-color: #4caf50;
+  color: white;
+}
+
+.login-footer {
+  margin-top: 15px;
+  font-size: 14px;
+  color: #777;
+  text-align: center;
+}
+
+.manager-mode .login-footer {
+  color: #ffffff;
+}
+
+.login-footer a {
+  color: #4caf50;
+  text-decoration: none;
+  margin-left: 5px;
+}
+
+.manager-mode .login-footer a {
+  color: #ffffff;
+}
+
+/* Toggle Role Styles */
+.role-toggle {
+  display: flex;
+  background-color: #4caf50;
+  border-radius: 20px;
+  overflow: hidden;
+  width: 160px;
+  height: 32px;
+  margin-left: auto;
+  margin-bottom: 20px;
+  font-size: 12px;
+  transition: background-color 0.3s;
+  border: 1px solid #388e3c;
+}
+
+.role-option {
+  flex: 1;
+  text-align: center;
+  line-height: 32px;
+  color: #4caf50;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.role-option.active {
+  background-color: white;
+  color: #4caf50;
+  font-weight: bold;
+  border-radius: 20px;
+}
+
+.company-group {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  margin-bottom: 0;
+}
+
+.company-group.visible {
+  height: 21px; /* hoặc điều chỉnh theo kích thước input thực tế */
+  opacity: 1;
+  margin-bottom: 20px;
+}
+

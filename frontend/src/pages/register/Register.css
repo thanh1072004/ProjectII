@@ -1,0 +1,80 @@
+.register-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .register-box {
+    width: 400px;
+    background-color: #ffffff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.5s ease;
+  }
+  
+  .register-box h2 {
+    margin-bottom: 20px;
+    font-size: 24px;
+    text-align: center;
+    transition: color 0.5s;
+  }
+  
+  .input-group {
+    display: flex;
+    align-items: center;
+    background: #f2f2f2;
+    border-radius: 30px;
+    padding: 10px 20px;
+    margin-bottom: 20px;
+  }
+  
+  .input-group i {
+    margin-right: 10px;
+    color: #999;
+  }
+  
+  .input-group input {
+    border: none;
+    outline: none;
+    background: transparent;
+    width: 100%;
+    font-size: 16px;
+  }
+  
+  .register-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s;
+  }
+  
+  .register-btn:hover {
+    background-color: #43a047;
+    color: white;
+  }
+  
+  .register-footer {
+    margin-top: 20px;
+    font-size: 14px;
+    text-align: center;
+  }
+  
+  .register-footer a {
+    color: #4caf50; 
+    text-decoration: underline;
+    margin-left: 5px;
+    transition: color 0.3s;
+  }
+
+  .manager-mode .register-footer a {
+    color: #ffffff;
+  }
+  

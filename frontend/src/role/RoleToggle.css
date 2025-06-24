@@ -1,0 +1,32 @@
+.role-toggle {
+    width: 130px;
+    height: 30px;
+    background-color: #2e7d32;   /* màu nền xanh lá cây đậm */
+    border-radius: 999px;
+    display: flex;
+    position: relative;
+    cursor: pointer;
+    font-family: sans-serif;
+    font-size: 11px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
+    padding: 2px;
+    box-sizing: border-box;
+}
+
+.role-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    transition: all 0.3s ease;
+    color: white;               
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.role-option.selected {
+    background-color: white;       /* phần được chọn có nền trắng */
+    color: #2e7d32;                /* chữ xanh lá cây đậm */
+    font-weight: bold;
+}
