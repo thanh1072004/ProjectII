@@ -1,31 +1,23 @@
-const jwt = require('jsonwebtoken')
-
 const requireAuth = (req, res, next) => {
-    const token = req.cookies.accessToken;
-    if (!token) return res.status(401).json({error: 'Unauthorized, please login!'});
-    try { 
-        const deocded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = deocded;
-        next();
-    }catch (err) {
-        return res.status(401).json({error: 'Token verification failed'}); 
+    if (!req.user) {
+        console.error('requireAuth: No user found in request');
+        return res.status(401).json({ error: 'Unauthorized: No user found' });
     }
-}
+    console.log(`requireAuth: User ${req.user.email} authenticated`);
+    next();
+};
 
 const requireManager = (req, res, next) => {
-    const token = req.cookies.accessToken;
-    if (!token) return res.status(401).json({error: 'Unauthorized, please login!'});
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-        if (req.user.role != 'manager') return res.status(401).json({error : 'Unauthorized, not manager'});
-        next();
-    }catch (err){ 
-        return res.status(401).json({error: 'Token verification failed'});
+    if (!req.user) {
+        console.error('requireManager: No user found in request');
+        return res.status(401).json({ error: 'Unauthorized: No user found' });
     }
-}
+    if (req.user.role !== 'manager') {
+        console.error(`requireManager: User ${req.user.email} is not a manager, role: ${req.user.role}`);
+        return res.status(403).json({ error: 'Forbidden: Manager role required' });
+    }
+    console.log(`requireManager: User ${req.user.email} authenticated as manager`);
+    next();
+};
 
-module.exports = {
-    requireAuth,
-    requireManager,
-}
+module.exports = { requireAuth, requireManager };

@@ -1,48 +1,97 @@
-//TODO: Add employee backend
-/*
-    - Create password for personal.
-    - Send request to fetch password from the company 
-    - In Request password section, employee able to see all of the password of that company and then click the domain if want to know password.
-*/
 const express = require('express');
 const router = express.Router();
 const User = require('../models/user');
-const jwt = require('jsonwebtoken');
-const { requireAuth } = require('./helper')
+const { requireAuth } = require('./helper');
 
-router.post('/employee/add-password', requireAuth, async (req, res) => {
+router.post('/add-password', requireAuth, async (req, res) => {
     const { name, website, username, encrypted_password } = req.body;
-    
-    try {
-        const user = await User.findById(req.user.id);
-        if (!user) return res.status(404).json({ error: 'User not found' });
 
-        user.personalPasswordTable.push({
+    try {
+        console.log('POST /api/employee/add-password called by:', req.user.email);
+        console.log('Received request body:', {
             name,
             website,
             username,
-            encrypted_password,
-            sharedWith: []
+            encryptedPassword: typeof encrypted_password === 'string' ? encrypted_password.substring(0, 50) + '...' : encrypted_password
         });
 
+        // Validate input
+        if (!name || !username || !encrypted_password) {
+            console.error('Missing required fields:', { name, username, hasEncryptedPassword: !!encrypted_password });
+            return res.status(400).json({ error: 'Missing required fields: name, username, encrypted_password' });
+        }
+
+        // Parse và validate encrypted_password
+        let parsedEncryptedPassword;
+        try {
+            parsedEncryptedPassword = typeof encrypted_password === 'string' ? JSON.parse(encrypted_password) : encrypted_password;
+            if (!parsedEncryptedPassword.ephemeralPublicKey || !parsedEncryptedPassword.iv || !parsedEncryptedPassword.ciphertext || !parsedEncryptedPassword.authTag) {
+                throw new Error('Invalid encrypted_password format: Missing ephemeralPublicKey, iv, ciphertext, or authTag');
+            }
+        } catch (error) {
+            console.error('Invalid encrypted_password format:', error.message);
+            return res.status(400).json({ error: 'Invalid encrypted_password format, must be valid JSON with ephemeralPublicKey, iv, ciphertext, and authTag' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            console.error('User not found for ID:', req.user.id);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (user.role !== 'employee') {
+            console.error('Unauthorized: User is not an employee:', req.user.email);
+            return res.status(403).json({ error: 'Unauthorized: Only employees can use this endpoint' });
+        }
+
+        // Kiểm tra xem mật khẩu đã tồn tại chưa
+        const existingEntry = user.personalPasswordTable.find(
+            entry => entry.name === name && entry.website === (website || '')
+        );
+        if (existingEntry) {
+            console.error('Password already exists:', { name, website });
+            return res.status(400).json({ error: 'Password with the same name and website already exists' });
+        }
+
+        // Tạo entry mật khẩu
+        const passwordEntry = {
+            name,
+            website: website || '',
+            username,
+            encrypted_password: parsedEncryptedPassword,
+            sharedWith: []
+        };
+
+        user.personalPasswordTable.push(passwordEntry);
         await user.save();
+
+        console.log('Password added to personalPasswordTable:', {
+            name,
+            website: website || '',
+            username,
+            encrypted_password: { ...parsedEncryptedPassword, ciphertext: parsedEncryptedPassword.ciphertext.substring(0, 20) + '...' }
+        });
 
         res.status(200).json({
             message: 'Password added successfully',
-            password: user.personalPasswordTable[user.personalPasswordTable.length - 1]
+            password: passwordEntry
         });
     } catch (err) {
-        console.error('Error adding password:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Error adding password:', {
+            message: err.message,
+            stack: err.stack
+        });
+        res.status(500).json({ error: 'Internal server error: ' + err.message });
     }
 });
 
-router.get('/employee/passwords', requireAuth, async (req, res) => {
-    
+router.get('/passwords', requireAuth, async (req, res) => {
     try {
+        console.log('GET /api/employee/passwords called by:', req.user.email);
         const user = await User.findById(req.user.id);
         
         if (!user) {
+            console.error('User not found for ID:', req.user.id);
             return res.status(404).json({ error: 'User not found' });
         }
         
@@ -55,17 +104,20 @@ router.get('/employee/passwords', requireAuth, async (req, res) => {
             description: pwd.name
         }));
 
+        console.log('Returning personal passwords:', passwords.length);
         res.json({ passwords });
     } catch (error) {
         console.error('Error fetching passwords:', error);
-        res.status(500).json({ error: 'Failed to fetch passwords' });
+        res.status(500).json({ error: 'Failed to fetch passwords: ' + error.message });
     }
 });
 
-router.get('/employee/all-passwords', requireAuth, async (req, res) => {
+router.get('/all-passwords', requireAuth, async (req, res) => {
     try {
+        console.log('GET /api/employee/all-passwords called by:', req.user.email);
         const user = await User.findById(req.user.id);
         if (!user) {
+            console.error('User not found for ID:', req.user.id);
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -86,35 +138,46 @@ router.get('/employee/all-passwords', requireAuth, async (req, res) => {
             sharedBy: pwd.sharedBy
         }));
 
+        console.log('Returning passwords:', {
+            personalPasswordsCount: personalPasswords.length,
+            sharedPasswordsCount: sharedPasswords.length
+        });
+
         res.json({
             personalPasswords,
             sharedPasswords
         });
     } catch (error) {
-        console.error('Error fetching passwords:', error);
-        res.status(500).json({ error: 'Failed to fetch passwords' });
+        console.error('Error fetching all passwords:', error);
+        res.status(500).json({ error: 'Failed to fetch passwords: ' + error.message });
     }
 });
 
 router.get('/company-members', requireAuth, async (req, res) => {
     try {
-        const users = await User.find({}, 'email role'); // add 'name' if you have it
+        console.log('GET /api/employee/company-members called by:', req.user.email);
+        const users = await User.find({}, 'email role');
+        console.log('Returning company members:', users.length);
         res.json({ users });
     } catch (err) {
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Error fetching company members:', err);
+        res.status(500).json({ error: 'Internal server error: ' + err.message });
     }
 });
 
 router.get('/users/:email/public-key', requireAuth, async (req, res) => {
     try {
+        console.log('GET /api/employee/users/:email/public-key called by:', req.user.email);
         const { email } = req.params;
         const user = await User.findOne({ email }).select('publicKey email');
         
         if (!user) {
+            console.error('User not found for email:', email);
             return res.status(404).json({ error: 'User not found' });
         }
         
         if (!user.publicKey) {
+            console.error('User has no public key:', email);
             return res.status(404).json({ error: 'User has no public key' });
         }
         
@@ -124,18 +187,18 @@ router.get('/users/:email/public-key', requireAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching public key:', error);
-        res.status(500).json({ error: 'Failed to fetch public key' });
+        res.status(500).json({ error: 'Failed to fetch public key: ' + error.message });
     }
 });
 
-router.post('/employee/share-password', requireAuth, async (req, res) => {
+router.post('/share-password', requireAuth, async (req, res) => {
     try {
-        console.log('=== Share Password Backend Debug ===');
+        console.log('POST /api/employee/share-password called by:', req.user.email);
         console.log('Request body:', req.body);
         
         const { 
             recipientEmail, 
-            encryptedPasswordData,  // Changed from encryptedPassword
+            encryptedPasswordData,
             passwordMetadata 
         } = req.body;
         
@@ -145,15 +208,15 @@ router.post('/employee/share-password', requireAuth, async (req, res) => {
             metadata: passwordMetadata
         });
         
-        // Find recipient and validate
         const recipient = await User.findOne({ email: recipientEmail });
         if (!recipient) {
+            console.error('Recipient not found:', recipientEmail);
             return res.status(404).json({ error: 'Recipient not found' });
         }
 
-        // Find sender
         const sender = await User.findById(req.user.id);
         if (!sender) {
+            console.error('Sender not found for ID:', req.user.id);
             return res.status(404).json({ error: 'Sender not found' });
         }
 
@@ -162,12 +225,11 @@ router.post('/employee/share-password', requireAuth, async (req, res) => {
             recipient: recipient.email
         });
 
-        // Extract metadata
         const { name, website, username, passwordId } = passwordMetadata;
         
-        // Find the password entry to update sharedWith
         const passwordEntry = sender.personalPasswordTable.id(passwordId);
         if (!passwordEntry) {
+            console.error('Password not found for ID:', passwordId);
             return res.status(404).json({ error: 'Password not found' });
         }
 
@@ -176,23 +238,34 @@ router.post('/employee/share-password', requireAuth, async (req, res) => {
             name: passwordEntry.name
         });
 
-        // Add recipient email to sharedWith if not already present
         if (!passwordEntry.sharedWith.includes(recipientEmail)) {
             passwordEntry.sharedWith.push(recipientEmail);
         }
 
-        // Add to recipient's sharedPasswordTable
         recipient.sharedPasswordTable.push({
             name,
             website,
             username,
-            encrypted_password: encryptedPasswordData, // This is the E2E encrypted data
+            encrypted_password: encryptedPasswordData,
             sharedBy: sender.email
         });
 
-        console.log('Added to recipient shared table');
+        // Thêm thông báo cho người nhận
+        recipient.notifications.push({
+            message: `User ${sender.email} shared password ${name} with you`,
+            type: 'password_shared',
+            senderEmail: sender.email,
+            passwordName: name,
+            read: false
+        });
 
-        // Save both users
+        console.log('Added to recipient sharedPasswordTable:', { name, website, username, sharedBy: sender.email });
+        console.log('Added notification to recipient:', {
+            message: `User ${sender.email} shared password ${name} with you`,
+            senderEmail: sender.email,
+            passwordName: name
+        });
+
         await Promise.all([
             sender.save(),
             recipient.save()
@@ -207,10 +280,180 @@ router.post('/employee/share-password', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error sharing password:', error);
-        res.status(500).json({ error: 'Failed to share password' });
+        console.error('Error sharing password:', {
+            message: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ error: 'Failed to share password: ' + error.message });
     }
 });
 
+router.get('/notifications', requireAuth, async (req, res) => {
+    try {
+        console.log('GET /api/employee/notifications called by:', req.user.email);
+        const user = await User.findById(req.user.id).select('notifications');
+        
+        if (!user) {
+            console.error('User not found for ID:', req.user.id);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const notifications = user.notifications.map(notification => ({
+            id: notification._id,
+            message: notification.message,
+            type: notification.type,
+            senderEmail: notification.senderEmail,
+            passwordName: notification.passwordName,
+            read: notification.read,
+            createdAt: notification.createdAt
+        }));
+
+        console.log('Returning notifications:', notifications.length);
+        res.json({ notifications });
+    } catch (error) {
+        console.error('Error fetching notifications:', error);
+        res.status(500).json({ error: 'Failed to fetch notifications: ' + error.message });
+    }
+});
+
+router.post('/notifications/:id/read', requireAuth, async (req, res) => {
+    try {
+        console.log('POST /api/employee/notifications/:id/read called by:', req.user.email);
+        const { id } = req.params;
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            console.error('User not found for ID:', req.user.id);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const notification = user.notifications.id(id);
+        if (!notification) {
+            console.error('Notification not found for ID:', id);
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+
+        notification.read = true;
+        await user.save();
+
+        console.log('Notification marked as read:', {
+            id,
+            message: notification.message
+        });
+
+        res.json({ message: 'Notification marked as read' });
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+        res.status(500).json({ error: 'Failed to mark notification as read: ' + error.message });
+    }
+});
+
+router.delete('/passwords/:id', requireAuth, async (req, res) => {
+    try {
+        console.log('DELETE /api/employee/passwords/:id called by:', req.user.email);
+        const { id } = req.params;
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            console.error('User not found for ID:', req.user.id);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Kiểm tra và xóa từ personalPasswordTable
+        const personalPassword = user.personalPasswordTable.id(id);
+        if (personalPassword) {
+            user.personalPasswordTable.pull(id);
+            console.log('Removed personal password:', { id, name: personalPassword.name });
+
+            // Xóa email người dùng khỏi sharedWith của mật khẩu ở các người dùng khác
+            const sharedWithUsers = await User.find({ 'personalPasswordTable.sharedWith': user.email });
+            for (const sharedUser of sharedWithUsers) {
+                const sharedPassword = sharedUser.personalPasswordTable.find(pwd => pwd.sharedWith.includes(user.email));
+                if (sharedPassword) {
+                    sharedPassword.sharedWith = sharedPassword.sharedWith.filter(email => email !== user.email);
+                    await sharedUser.save();
+                }
+            }
+
+            await user.save();
+            return res.json({ message: 'Personal password deleted successfully' });
+        }
+
+        // Kiểm tra và xóa từ sharedPasswordTable
+        const sharedPassword = user.sharedPasswordTable.id(id);
+        if (sharedPassword) {
+            user.sharedPasswordTable.pull(id);
+            console.log('Removed shared password:', { id, name: sharedPassword.name });
+            await user.save();
+            return res.json({ message: 'Shared password deleted successfully' });
+        }
+
+        console.error('Password not found for ID:', id);
+        return res.status(404).json({ error: 'Password not found' });
+    } catch (error) {
+        console.error('Error deleting password:', error);
+        res.status(500).json({ error: 'Failed to delete password: ' + error.message });
+    }
+});
+
+router.put('/passwords/:id', requireAuth, async (req, res) => {
+    try {
+        console.log('PUT /api/employee/passwords/:id called by:', req.user.email);
+        const { id } = req.params;
+        const { name, website, username, encrypted_password } = req.body;
+
+        // Validate input
+        if (!name || !username || !encrypted_password) {
+            console.error('Missing required fields:', { name, username, hasEncryptedPassword: !!encrypted_password });
+            return res.status(400).json({ error: 'Missing required fields: name, username, encrypted_password' });
+        }
+
+        // Parse và validate encrypted_password
+        let parsedEncryptedPassword;
+        try {
+            parsedEncryptedPassword = typeof encrypted_password === 'string' ? JSON.parse(encrypted_password) : encrypted_password;
+            if (!parsedEncryptedPassword.ephemeralPublicKey || !parsedEncryptedPassword.iv || !parsedEncryptedPassword.ciphertext || !parsedEncryptedPassword.authTag) {
+                throw new Error('Invalid encrypted_password format: Missing ephemeralPublicKey, iv, ciphertext, or authTag');
+            }
+        } catch (error) {
+            console.error('Invalid encrypted_password format:', error.message);
+            return res.status(400).json({ error: 'Invalid encrypted_password format, must be valid JSON with ephemeralPublicKey, iv, ciphertext, and authTag' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            console.error('User not found for ID:', req.user.id);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Kiểm tra mật khẩu trong personalPasswordTable
+        const passwordEntry = user.personalPasswordTable.id(id);
+        if (!passwordEntry) {
+            console.error('Password not found for ID:', id);
+            return res.status(404).json({ error: 'Password not found' });
+        }
+
+        // Cập nhật thông tin mật khẩu
+        passwordEntry.name = name;
+        passwordEntry.website = website || '';
+        passwordEntry.username = username;
+        passwordEntry.encrypted_password = parsedEncryptedPassword;
+
+        await user.save();
+
+        console.log('Updated password entry:', {
+            id,
+            name,
+            website: website || '',
+            username,
+            encrypted_password: { ...parsedEncryptedPassword, ciphertext: parsedEncryptedPassword.ciphertext.substring(0, 20) + '...' }
+        });
+
+        res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Error updating password:', error);
+        res.status(500).json({ error: 'Failed to update password: ' + error.message });
+    }
+});
 
 module.exports = router;

@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon app.js",
     "chat": "nodemon chat-server.js",
-    "dev": "concurrently \"npm run start\" \"npm run chat\"" 
+    "dev": "concurrently \"npm run start\" \"npm run chat\""
   },
   "author": "",
   "license": "ISC",
@@ -20,6 +20,7 @@
     "expressjs": "^1.0.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.15.0",
+    "nodemailer": "^7.0.5",
     "nodemon": "^3.1.10",
     "ws": "^8.18.2"
   },

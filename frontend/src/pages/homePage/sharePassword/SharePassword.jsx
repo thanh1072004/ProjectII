@@ -83,7 +83,7 @@ export default function SharePassword() {
         try {
             // Get recipient's public key
             const keyResponse = await axios.get(
-                `${import.meta.env.VITE_API_URL}/users/${recipientEmail}/public-key`
+                `${import.meta.env.VITE_API_URL}/employee/users/${recipientEmail}/public-key`
             );
             
             console.log('API Response:', keyResponse.data);

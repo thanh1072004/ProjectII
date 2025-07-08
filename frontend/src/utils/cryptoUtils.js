@@ -1,31 +1,22 @@
-// ===============================================
-// TRUE END-TO-END ENCRYPTION WITH FORWARD SECRECY
-// Based on CS255 Project 2 Double Ratchet concepts
-// ===============================================
-
-// Session management for forward secrecy
 const sessions = new Map();
 
-// ===============================================
-// UTILITY FUNCTIONS
-// ===============================================
-
+// Chuyển đổi ArrayBuffer thành base64
 const arrayBufferToBase64 = (buffer) => {
     const bytes = new Uint8Array(buffer);
     const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
     return btoa(binary);
 };
 
+// Chuyển đổi base64 thành ArrayBuffer
 const base64ToArrayBuffer = (base64) => {
     try {
-        // Clean the base64 string - remove any whitespace/newlines
+        if (!base64 || typeof base64 !== 'string') {
+            throw new Error('Input must be a non-empty string');
+        }
         const cleanBase64 = base64.replace(/\s+/g, '');
-        
-        // Validate base64 format
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleanBase64)) {
             throw new Error('Invalid base64 format');
         }
-        
         const binary = atob(cleanBase64);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) {
@@ -38,11 +29,68 @@ const base64ToArrayBuffer = (base64) => {
     }
 };
 
-// ===============================================
-// ECDH KEY GENERATION AND MANAGEMENT
-// ===============================================
+// Tạo khóa AES tạm thời
+export const generateTempAESKey = async () => {
+    try {
+        const key = await window.crypto.subtle.generateKey(
+            {
+                name: 'AES-GCM',
+                length: 256
+            },
+            true,
+            ['encrypt', 'decrypt']
+        );
+        const exportedKey = await window.crypto.subtle.exportKey('raw', key);
+        return arrayBufferToBase64(exportedKey);
+    } catch (error) {
+        console.error('Failed to generate temp AES key:', error);
+        throw new Error(`Failed to generate temp AES key: ${error.message}`);
+    }
+};
 
-// Generate ECDH key pair for key exchange
+// Mã hóa bằng AES-GCM
+export const encryptWithAES = async (data, key) => {
+    try {
+        if (!data || !key) {
+            throw new Error('Missing data or key');
+        }
+        const encoder = new TextEncoder();
+        const keyBuffer = base64ToArrayBuffer(key);
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+        const cryptoKey = await window.crypto.subtle.importKey(
+            'raw',
+            keyBuffer,
+            { name: 'AES-GCM' },
+            false,
+            ['encrypt']
+        );
+
+        const encryptedData = await window.crypto.subtle.encrypt(
+            {
+                name: 'AES-GCM',
+                iv: iv
+            },
+            cryptoKey,
+            encoder.encode(data)
+        );
+
+        const encryptedArray = new Uint8Array(encryptedData);
+        const authTag = encryptedArray.slice(-16); // AES-GCM auth tag là 16 bytes
+        const ciphertext = encryptedArray.slice(0, -16);
+
+        return JSON.stringify({
+            iv: arrayBufferToBase64(iv),
+            ciphertext: arrayBufferToBase64(ciphertext),
+            authTag: arrayBufferToBase64(authTag)
+        });
+    } catch (error) {
+        console.error('AES encryption failed:', error);
+        throw new Error(`Failed to encrypt with AES: ${error.message}`);
+    }
+};
+
+// Tạo cặp khóa ECDH với P-256
 export const generateECDHKeyPair = async () => {
     try {
         const keyPair = await window.crypto.subtle.generateKey(
@@ -68,19 +116,14 @@ export const generateECDHKeyPair = async () => {
     }
 };
 
-// ===============================================
-// PRIVATE KEY ENCRYPTION/DECRYPTION FOR STORAGE
-// ===============================================
-
+// Mã hóa private key với mật khẩu
 export const encryptPrivateKey = async (privateKey, password) => {
     try {
         const encoder = new TextEncoder();
         const passwordData = encoder.encode(password);
         
-        // Generate salt
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         
-        // Derive key from password using PBKDF2
         const keyMaterial = await window.crypto.subtle.importKey(
             'raw',
             passwordData,
@@ -102,10 +145,8 @@ export const encryptPrivateKey = async (privateKey, password) => {
             ['encrypt']
         );
         
-        // Generate IV
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         
-        // Encrypt private key
         const privateKeyData = encoder.encode(privateKey);
         const encryptedData = await window.crypto.subtle.encrypt(
             {
@@ -116,42 +157,55 @@ export const encryptPrivateKey = async (privateKey, password) => {
             privateKeyData
         );
         
-        // Combine salt, iv, and encrypted data
-        const result = {
+        const encryptedArray = new Uint8Array(encryptedData);
+        const authTag = encryptedArray.slice(-16); // AES-GCM auth tag là 16 bytes
+        const ciphertext = encryptedArray.slice(0, -16);
+        
+        return JSON.stringify({
             salt: arrayBufferToBase64(salt),
             iv: arrayBufferToBase64(iv),
-            ciphertext: arrayBufferToBase64(encryptedData)
-        };
-        
-        return JSON.stringify(result);
+            ciphertext: arrayBufferToBase64(ciphertext),
+            authTag: arrayBufferToBase64(authTag)
+        });
     } catch (error) {
         console.error('Private key encryption failed:', error);
         throw new Error(`Failed to encrypt private key: ${error.message}`);
     }
 };
 
+// Giải mã private key
 export const decryptPrivateKey = async (encryptedPrivateKey, password) => {
     try {
-        const encryptedData = JSON.parse(encryptedPrivateKey);
-        const { salt, iv, ciphertext } = encryptedData;
-        
-        const encoder = new TextEncoder();
-        const decoder = new TextDecoder();
-        const passwordData = encoder.encode(password);
-        
-        // Derive the same key from password
+        let data;
+        try {
+            data = typeof encryptedPrivateKey === 'string' ? JSON.parse(encryptedPrivateKey) : encryptedPrivateKey;
+        } catch (parseError) {
+            console.error('Lỗi phân tích encryptedPrivateKey:', parseError.message);
+            throw new Error('Dữ liệu khóa riêng không hợp lệ: Không phải JSON hợp lệ');
+        }
+
+        const { iv, ciphertext, authTag, salt } = data;
+        if (!iv || !ciphertext || !authTag || !salt) {
+            console.error('Dữ liệu mã hóa khóa riêng không hợp lệ:', data);
+            throw new Error('Thiếu iv, ciphertext, authTag hoặc salt trong dữ liệu mã hóa');
+        }
+
+        console.log('Dữ liệu mã hóa khóa riêng:', { iv, ciphertext, authTag, salt });
+
+        const passwordBuffer = new TextEncoder().encode(password);
         const keyMaterial = await window.crypto.subtle.importKey(
             'raw',
-            passwordData,
+            passwordBuffer,
             { name: 'PBKDF2' },
             false,
-            ['deriveKey']
+            ['deriveBits', 'deriveKey']
         );
-        
+
+        const saltBuffer = base64ToArrayBuffer(salt);
         const derivedKey = await window.crypto.subtle.deriveKey(
             {
                 name: 'PBKDF2',
-                salt: base64ToArrayBuffer(salt),
+                salt: saltBuffer,
                 iterations: 100000,
                 hash: 'SHA-256'
             },
@@ -160,34 +214,46 @@ export const decryptPrivateKey = async (encryptedPrivateKey, password) => {
             false,
             ['decrypt']
         );
-        
-        // Decrypt
+
+        const ivBuffer = base64ToArrayBuffer(iv);
+        const ciphertextBuffer = base64ToArrayBuffer(ciphertext);
+        const authTagBuffer = base64ToArrayBuffer(authTag);
+
+        const combinedBuffer = new Uint8Array(ciphertextBuffer.byteLength + authTagBuffer.byteLength);
+        combinedBuffer.set(new Uint8Array(ciphertextBuffer), 0);
+        combinedBuffer.set(new Uint8Array(authTagBuffer), ciphertextBuffer.byteLength);
+
+        console.log('Kích thước buffer kết hợp:', combinedBuffer.length);
+
         const decryptedData = await window.crypto.subtle.decrypt(
             {
                 name: 'AES-GCM',
-                iv: base64ToArrayBuffer(iv)
+                iv: ivBuffer
             },
             derivedKey,
-            base64ToArrayBuffer(ciphertext)
+            combinedBuffer
         );
-        
-        return decoder.decode(decryptedData);
+
+        const decoder = new TextDecoder();
+        const privateKey = decoder.decode(decryptedData);
+        console.log('Khóa riêng đã giải mã:', privateKey.substring(0, 50) + '...');
+
+        return privateKey;
     } catch (error) {
-        console.error('Private key decryption failed:', error);
-        throw new Error(`Failed to decrypt private key: ${error.message}`);
+        console.error('Lỗi giải mã khóa riêng:', {
+            message: error.message,
+            stack: error.stack,
+            encryptedPrivateKey: JSON.stringify(encryptedPrivateKey, null, 2)
+        });
+        throw new Error(`Không thể giải mã khóa riêng: ${error.message}`);
     }
 };
 
-// ===============================================
-// KEY IMPORT/EXPORT HELPERS
-// ===============================================
-
+// Nhập public key
 export const importECDHPublicKey = async (publicKeyString) => {
     try {
-        // Check if it's a PEM format key
         if (publicKeyString.includes('-----BEGIN PUBLIC KEY-----')) {
             console.log('Detected PEM format, converting...');
-            // Extract base64 from PEM
             const base64Key = publicKeyString
                 .replace('-----BEGIN PUBLIC KEY-----', '')
                 .replace('-----END PUBLIC KEY-----', '')
@@ -233,12 +299,11 @@ export const importECDHPublicKey = async (publicKeyString) => {
     }
 };
 
+// Nhập private key
 export const importECDHPrivateKey = async (privateKeyString) => {
     try {
-        // Check if it's a PEM format key
         if (privateKeyString.includes('-----BEGIN PRIVATE KEY-----')) {
             console.log('Detected PEM format private key, converting...');
-            // Extract base64 from PEM
             const base64Key = privateKeyString
                 .replace('-----BEGIN PRIVATE KEY-----', '')
                 .replace('-----END PRIVATE KEY-----', '')
@@ -259,7 +324,6 @@ export const importECDHPrivateKey = async (privateKeyString) => {
                 ["deriveKey", "deriveBits"]
             );
         } else {
-            // Assume it's already base64
             const keyData = base64ToArrayBuffer(privateKeyString);
             
             return await window.crypto.subtle.importKey(
@@ -279,20 +343,14 @@ export const importECDHPrivateKey = async (privateKeyString) => {
     }
 };
 
-// ===============================================
-// PASSWORD ENCRYPTION WITH ECDH
-// ===============================================
-
+// Mã hóa với public key
 export const encryptWithPublicKey = async (data, publicKeyString) => {
     try {
-        // Generate ephemeral key pair for this encryption
+        console.log('Encrypting with publicKey:', publicKeyString.substring(0, 20) + '...');
         const ephemeralKeyPair = await generateECDHKeyPair();
-        
-        // Import recipient's public key
         const recipientPublicKey = await importECDHPublicKey(publicKeyString);
         const ephemeralPrivateKey = await importECDHPrivateKey(ephemeralKeyPair.privateKey);
         
-        // Derive shared secret
         const sharedSecret = await window.crypto.subtle.deriveBits(
             {
                 name: "ECDH",
@@ -302,7 +360,6 @@ export const encryptWithPublicKey = async (data, publicKeyString) => {
             256
         );
         
-        // Derive encryption key from shared secret
         const encryptionKey = await window.crypto.subtle.importKey(
             "raw",
             sharedSecret,
@@ -311,10 +368,8 @@ export const encryptWithPublicKey = async (data, publicKeyString) => {
             ["encrypt"]
         );
         
-        // Generate IV
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         
-        // Encrypt data
         const encoder = new TextEncoder();
         const dataBuffer = encoder.encode(data);
         const encryptedData = await window.crypto.subtle.encrypt(
@@ -326,26 +381,48 @@ export const encryptWithPublicKey = async (data, publicKeyString) => {
             dataBuffer
         );
         
-        return JSON.stringify({
+        const encryptedArray = new Uint8Array(encryptedData);
+        const authTag = encryptedArray.slice(-16); // AES-GCM auth tag là 16 bytes
+        const ciphertext = encryptedArray.slice(0, -16);
+
+        const result = {
             ephemeralPublicKey: ephemeralKeyPair.publicKey,
             iv: arrayBufferToBase64(iv),
-            ciphertext: arrayBufferToBase64(encryptedData)
+            ciphertext: arrayBufferToBase64(ciphertext),
+            authTag: arrayBufferToBase64(authTag)
+        };
+
+        console.log('Encryption result:', {
+            ephemeralPublicKey: result.ephemeralPublicKey.substring(0, 20) + '...',
+            iv: result.iv,
+            ciphertext: result.ciphertext.substring(0, 20) + '...',
+            authTag: result.authTag
         });
+
+        return result;
     } catch (error) {
-        console.error('ECDH encryption failed:', error);
+        console.error('ECDH encryption failed:', {
+            message: error.message,
+            stack: error.stack,
+            publicKeyPreview: publicKeyString.substring(0, 20) + '...'
+        });
         throw new Error(`Failed to encrypt with public key: ${error.message}`);
     }
 };
 
+// Giải mã với private key
 export const decryptWithPrivateKey = async (encryptedData, privateKeyString) => {
     try {
-        const { ephemeralPublicKey, iv, ciphertext } = JSON.parse(encryptedData);
-        
-        // Import keys
+        const data = typeof encryptedData === 'string' ? JSON.parse(encryptedData) : encryptedData;
+        const { ephemeralPublicKey, iv, ciphertext, authTag } = data;
+
+        if (!ephemeralPublicKey || !iv || !ciphertext || !authTag) {
+            throw new Error('Invalid encrypted data format: Missing ephemeralPublicKey, iv, ciphertext, or authTag');
+        }
+
         const ephemeralPubKey = await importECDHPublicKey(ephemeralPublicKey);
         const recipientPrivateKey = await importECDHPrivateKey(privateKeyString);
-        
-        // Derive shared secret
+
         const sharedSecret = await window.crypto.subtle.deriveBits(
             {
                 name: "ECDH",
@@ -354,8 +431,7 @@ export const decryptWithPrivateKey = async (encryptedData, privateKeyString) => 
             recipientPrivateKey,
             256
         );
-        
-        // Derive decryption key from shared secret
+
         const decryptionKey = await window.crypto.subtle.importKey(
             "raw",
             sharedSecret,
@@ -363,39 +439,41 @@ export const decryptWithPrivateKey = async (encryptedData, privateKeyString) => 
             false,
             ["decrypt"]
         );
-        
-        // Decrypt data
+
+        const ciphertextBuffer = base64ToArrayBuffer(ciphertext);
+        const authTagBuffer = base64ToArrayBuffer(authTag);
+        const combinedBuffer = new Uint8Array(ciphertextBuffer.byteLength + authTagBuffer.byteLength);
+        combinedBuffer.set(new Uint8Array(ciphertextBuffer), 0);
+        combinedBuffer.set(new Uint8Array(authTagBuffer), ciphertextBuffer.byteLength);
+
         const decryptedData = await window.crypto.subtle.decrypt(
             {
                 name: "AES-GCM",
                 iv: base64ToArrayBuffer(iv)
             },
             decryptionKey,
-            base64ToArrayBuffer(ciphertext)
+            combinedBuffer
         );
-        
+
         const decoder = new TextDecoder();
         return decoder.decode(decryptedData);
     } catch (error) {
-        console.error('ECDH decryption failed:', error);
+        console.error('ECDH decryption failed:', {
+            message: error.message,
+            stack: error.stack,
+            encryptedData: JSON.stringify(encryptedData, null, 2)
+        });
         throw new Error(`Failed to decrypt with private key: ${error.message}`);
     }
 };
 
-// ===============================================
-// KEY TESTING AND VALIDATION
-// ===============================================
-
+// Kiểm tra cặp khóa
 export const testKeyPair = async (publicKey, privateKey) => {
     try {
-        // Test message
         const testMessage = "test-key-pair-validation";
-        
-        // Import keys for testing
         const pubKey = await importECDHPublicKey(publicKey);
         const privKey = await importECDHPrivateKey(privateKey);
         
-        // Try to derive a shared secret (basic validation)
         const sharedSecret = await window.crypto.subtle.deriveBits(
             {
                 name: "ECDH",
@@ -405,24 +483,19 @@ export const testKeyPair = async (publicKey, privateKey) => {
             256
         );
         
-        return sharedSecret.byteLength === 32; // Should be 256 bits = 32 bytes
+        return sharedSecret.byteLength === 32;
     } catch (error) {
         console.error('Key pair validation failed:', error);
         return false;
     }
 };
 
-// ===============================================
-// KEY EXCHANGE & SESSION ESTABLISHMENT
-// ===============================================
-
+// Các hàm session và message giữ nguyên
 export const establishSession = async (myPrivateKey, theirPublicKey, sessionId) => {
     try {
-        // Import keys
         const privateKey = await importECDHPrivateKey(myPrivateKey);
         const publicKey = await importECDHPublicKey(theirPublicKey);
 
-        // Derive shared secret using ECDH
         const sharedSecret = await window.crypto.subtle.deriveBits(
             {
                 name: "ECDH",
@@ -432,7 +505,6 @@ export const establishSession = async (myPrivateKey, theirPublicKey, sessionId) 
             256
         );
 
-        // Initialize session with forward secrecy
         const session = {
             sharedSecret: new Uint8Array(sharedSecret),
             sendingChainKey: null,
@@ -442,15 +514,12 @@ export const establishSession = async (myPrivateKey, theirPublicKey, sessionId) 
             previousMessageNumber: 0
         };
 
-        // Derive initial root key from shared secret
         session.rootKey = await deriveRootKey(session.sharedSecret, sessionId);
         
-        // Derive initial chain keys
         const { chainKey: sendingChain, nextRootKey } = await deriveChainKey(session.rootKey, "sending");
         session.sendingChainKey = sendingChain;
         session.receivingChainKey = await deriveChainKey(nextRootKey, "receiving").then(r => r.chainKey);
 
-        // Store session
         sessions.set(sessionId, session);
 
         console.log(`Session established: ${sessionId}`);
@@ -460,10 +529,6 @@ export const establishSession = async (myPrivateKey, theirPublicKey, sessionId) 
         throw new Error(`Failed to establish session: ${error.message}`);
     }
 };
-
-// ===============================================
-// FORWARD SECRECY KEY RATCHETING
-// ===============================================
 
 const deriveRootKey = async (sharedSecret, info) => {
     const encoder = new TextEncoder();
@@ -479,7 +544,7 @@ const deriveRootKey = async (sharedSecret, info) => {
         {
             name: "HKDF",
             hash: "SHA-256",
-            salt: new Uint8Array(32), // Should be random in production
+            salt: new Uint8Array(32),
             info: encoder.encode(info)
         },
         keyMaterial,
@@ -493,14 +558,12 @@ const deriveChainKey = async (rootKey, direction) => {
     const encoder = new TextEncoder();
     const directionBytes = encoder.encode(direction);
     
-    // Sign to create chain key
     const chainKeyBytes = await window.crypto.subtle.sign(
         "HMAC",
         rootKey,
         directionBytes
     );
 
-    // Import as HMAC key for further derivation
     const chainKey = await window.crypto.subtle.importKey(
         "raw",
         chainKeyBytes,
@@ -509,7 +572,6 @@ const deriveChainKey = async (rootKey, direction) => {
         ["sign"]
     );
 
-    // Derive next root key for ratcheting
     const nextRootKeyBytes = await window.crypto.subtle.sign(
         "HMAC",
         rootKey,
@@ -537,19 +599,14 @@ const deriveMessageKey = async (chainKey, messageNumber) => {
         messageInfo
     );
 
-    // Create AES key for actual encryption
     return await window.crypto.subtle.importKey(
         "raw",
-        messageKeyBytes.slice(0, 32), // Use first 32 bytes for AES-256
+        messageKeyBytes.slice(0, 32),
         { name: "AES-GCM", length: 256 },
         false,
         ["encrypt", "decrypt"]
     );
 };
-
-// ===============================================
-// END-TO-END ENCRYPTION/DECRYPTION
-// ===============================================
 
 export const encryptMessage = async (message, sessionId, recipientId) => {
     try {
@@ -558,18 +615,15 @@ export const encryptMessage = async (message, sessionId, recipientId) => {
             throw new Error(`Session not found: ${sessionId}`);
         }
 
-        // Derive message key with forward secrecy
         const messageKey = await deriveMessageKey(session.sendingChainKey, session.messageNumber);
         
-        // Generate random IV
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         
-        // Encrypt message
         const encoder = new TextEncoder();
         const messageData = encoder.encode(JSON.stringify({ 
             content: message,
             timestamp: Date.now(),
-            sender: sessionId.split('-')[0] // Assuming sessionId format: "sender-recipient"
+            sender: sessionId.split('-')[0]
         }));
 
         const encryptedData = await window.crypto.subtle.encrypt(
@@ -581,7 +635,6 @@ export const encryptMessage = async (message, sessionId, recipientId) => {
             messageData
         );
 
-        // Create message header with metadata
         const header = {
             messageNumber: session.messageNumber,
             iv: arrayBufferToBase64(iv),
@@ -589,7 +642,6 @@ export const encryptMessage = async (message, sessionId, recipientId) => {
             timestamp: Date.now()
         };
 
-        // Advance the ratchet (forward secrecy)
         session.messageNumber++;
         const { chainKey: newChainKey } = await deriveChainKey(session.sendingChainKey, `msg-${session.messageNumber}`);
         session.sendingChainKey = newChainKey;
@@ -598,7 +650,6 @@ export const encryptMessage = async (message, sessionId, recipientId) => {
             header: header,
             ciphertext: arrayBufferToBase64(encryptedData)
         };
-
     } catch (error) {
         console.error('Message encryption failed:', error);
         throw new Error(`Failed to encrypt message: ${error.message}`);
@@ -614,10 +665,8 @@ export const decryptMessage = async (encryptedMessage, sessionId) => {
             throw new Error(`Session not found: ${sessionId}`);
         }
 
-        // Derive the same message key used for encryption
         const messageKey = await deriveMessageKey(session.receivingChainKey, header.messageNumber);
         
-        // Decrypt message
         const encryptedData = base64ToArrayBuffer(ciphertext);
         const iv = base64ToArrayBuffer(header.iv);
 
@@ -633,26 +682,26 @@ export const decryptMessage = async (encryptedMessage, sessionId) => {
         const decoder = new TextDecoder();
         const messageData = JSON.parse(decoder.decode(decryptedData));
 
-        // Advance receiving chain ratchet
         const { chainKey: newChainKey } = await deriveChainKey(session.receivingChainKey, `msg-${header.messageNumber + 1}`);
         session.receivingChainKey = newChainKey;
 
         return messageData.content;
-
     } catch (error) {
         console.error('Message decryption failed:', error);
         throw new Error(`Failed to decrypt message: ${error.message}`);
     }
 };
 
-// ===============================================
-// SIMPLIFIED PASSWORD SHARING (EVEN SIMPLER)
-// ===============================================
-
 export const encryptPasswordForSharing = async (password, recipientPublicKey) => {
     try {
-        // This is the simplest approach - just use your existing encryptWithPublicKey
-        return await encryptWithPublicKey(password, recipientPublicKey);
+        const result = await encryptWithPublicKey(password, recipientPublicKey);
+        console.log('Password sharing encryption result:', {
+            ephemeralPublicKey: result.ephemeralPublicKey.substring(0, 20) + '...',
+            iv: result.iv,
+            ciphertext: result.ciphertext.substring(0, 20) + '...',
+            authTag: result.authTag
+        });
+        return result;
     } catch (error) {
         console.error('Simple password encryption failed:', error);
         throw new Error(`Failed to encrypt password: ${error.message}`);
@@ -661,59 +710,13 @@ export const encryptPasswordForSharing = async (password, recipientPublicKey) =>
 
 export const decryptSharedPassword = async (encryptedData, recipientPrivateKey) => {
     try {
-        // Parse the E2E encrypted data
-        const { ephemeralPublicKey, iv, ciphertext } = JSON.parse(encryptedData);
-
-        // Import keys
-        const ephemeralPubKey = await importECDHPublicKey(ephemeralPublicKey);
-        const recipientPrivKey = await importECDHPrivateKey(recipientPrivateKey);
-        
-        // Derive shared secret using ECDH
-        const sharedSecret = await window.crypto.subtle.deriveBits(
-            {
-                name: "ECDH",
-                public: ephemeralPubKey
-            },
-            recipientPrivKey,
-            256
-        );
-        
-        // Create decryption key from shared secret
-        const decryptionKey = await window.crypto.subtle.importKey(
-            "raw",
-            sharedSecret,
-            { name: "AES-GCM" },
-            false,
-            ["decrypt"]
-        );
-        
-        // Decrypt data
-        const decryptedData = await window.crypto.subtle.decrypt(
-            {
-                name: "AES-GCM",
-                iv: base64ToArrayBuffer(iv)
-            },
-            decryptionKey,
-            base64ToArrayBuffer(ciphertext)
-        );
-        
-        const decoder = new TextDecoder();
-        const decryptedText = decoder.decode(decryptedData);
-        
-        // The encrypted data might be JSON with additional metadata
-        try {
-            const parsed = JSON.parse(decryptedText);
-            console.log('Decrypted data is JSON:', Object.keys(parsed));
-            return parsed.password || decryptedText; // Return just the password if it's wrapped
-        } catch (e) {
-            return decryptedText; 
-        }
-        
+        return await decryptWithPrivateKey(encryptedData, recipientPrivateKey);
     } catch (error) {
-        console.error('=== Shared Password Decryption Error ===');
-        console.error('Error type:', error.constructor.name);
-        console.error('Error message:', error.message);
-        console.error('Stack trace:', error.stack);
+        console.error('=== Shared Password Decryption Error ===', {
+            message: error.message,
+            stack: error.stack,
+            encryptedData: JSON.stringify(encryptedData, null, 2)
+        });
         throw new Error(`Failed to decrypt shared password: ${error.message}`);
     }
 };

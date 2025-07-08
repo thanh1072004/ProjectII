@@ -8,7 +8,7 @@ export default function CompanyMembers() {
   useEffect(() => {
     const fetchMembers = async () => {
       try {
-        const res = await axios.get('http://localhost:3000/api/company-members', { withCredentials: true });
+        const res = await axios.get('http://localhost:3000/api/employee/company-members', { withCredentials: true });
         setMembers(res.data.users);
       } catch (err) {
         setMembers([]);
