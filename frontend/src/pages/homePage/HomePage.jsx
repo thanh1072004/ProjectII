@@ -37,10 +37,16 @@ export default function HomePage() {
     const [notifications, setNotifications] = useState([]);
     const [showNotifications, setShowNotifications] = useState(false);
     const [editingPassword, setEditingPassword] = useState(null);
+    const [showUserInfo, setShowUserInfo] = useState(false);
+    const [activeUserTab, setActiveUserTab] = useState('yourInformation');
+    const [fullName, setFullName] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const [personalPasswordCount, setPersonalPasswordCount] = useState(0);
+    const [sharedPasswordCount, setSharedPasswordCount] = useState(0);
     const navigate = useNavigate();
 
     useEffect(() => {
-        const initializeSession = () => {
+        const initializeSession = async () => {
             const storedUser = sessionStorage.getItem('user');
             const storedPrivateKey = sessionStorage.getItem('privateKey');
             const storedToken = sessionStorage.getItem('accessToken');
@@ -48,13 +54,11 @@ export default function HomePage() {
             if (storedUser && storedPrivateKey && storedToken) {
                 try {
                     const userData = JSON.parse(storedUser);
-                    if (!user) {
-                        setUser(userData);
-                    }
-                    if (!privateKey) {
-                        setPrivateKey(storedPrivateKey);
-                    }
-                    console.log('Session restored for user:', userData.email, 'Role:', userData.role);
+                    setUser(userData);
+                    setPrivateKey(storedPrivateKey);
+                    setFullName(userData.fullName || '');
+                    setPhoneNumber(userData.phoneNumber || '');
+                    console.log('Session restored from storage:', userData.email, 'Role:', userData.role);
                     setIsInitialized(true);
                 } catch (error) {
                     console.error('Failed to restore user session:', error);
@@ -64,14 +68,34 @@ export default function HomePage() {
                     navigate('/login');
                 }
             } else {
-                console.log('No stored session found, redirecting to login');
-                navigate('/login');
+                // Gọi API để lấy thông tin người dùng mới nhất
+                try {
+                    console.log('No stored session, checking user with API');
+                    const response = await axios.get(`${import.meta.env.VITE_API_URL}/auth/check-user`, {
+                        withCredentials: true
+                    });
+                    const userData = response.data.user;
+                    setUser(userData);
+                    setFullName(userData.fullName || '');
+                    setPhoneNumber(userData.phoneNumber || '');
+                    sessionStorage.setItem('user', JSON.stringify(userData));
+                    console.log('User data fetched from API:', userData.email, 'Role:', userData.role);
+                    setIsInitialized(true);
+                } catch (error) {
+                    console.error('Failed to fetch user data:', error);
+                    sessionStorage.removeItem('user');
+                    sessionStorage.removeItem('privateKey');
+                    sessionStorage.removeItem('accessToken');
+                    navigate('/login');
+                }
             }
         };
 
         if (!user || !privateKey) {
             initializeSession();
         } else {
+            setFullName(user.fullName || '');
+            setPhoneNumber(user.phoneNumber || '');
             setIsInitialized(true);
         }
     }, [user, privateKey, setUser, setPrivateKey, navigate]);
@@ -230,6 +254,8 @@ export default function HomePage() {
 
             const allPasswords = [...personalPasswords, ...sharedPasswords];
             setPasswords(allPasswords);
+            setPersonalPasswordCount(personalPasswords.length);
+            setSharedPasswordCount(sharedPasswords.length);
         } catch (error) {
             console.error('Error fetching passwords:', {
                 message: error.message,
@@ -379,18 +405,15 @@ export default function HomePage() {
                 withCredentials: true
             });
 
-            // Cập nhật danh sách mật khẩu bằng cách gọi lại fetchPasswords
             await fetchPasswords();
             console.log('Password deleted successfully:', id);
 
-            // Xóa mật khẩu đã giải mã (nếu có)
             setDecryptedPasswords(prev => {
                 const newDecrypted = { ...prev };
                 delete newDecrypted[id];
                 return newDecrypted;
             });
 
-            // Nếu mật khẩu đang hiển thị, xóa trạng thái hiển thị
             if (visibleIndex === id) {
                 setVisibleIndex(null);
             }
@@ -486,6 +509,54 @@ export default function HomePage() {
         fetchPasswords();
     };
 
+    const handleChangePassword = async () => {
+        const currentPasswordInput = document.getElementById('currentPassword').value;
+        const newPasswordInput = document.getElementById('newPassword').value;
+        const confirmPasswordInput = document.getElementById('confirmPassword').value;
+
+        if (newPasswordInput !== confirmPasswordInput) {
+            alert('New password and confirmation do not match!');
+            return;
+        }
+
+        try {
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/auth/change-password`, {
+                currentPassword: currentPasswordInput,
+                newPassword: newPasswordInput
+            }, { withCredentials: true });
+
+            alert(response.data.message);
+            handleLogout();
+        } catch (error) {
+            console.error('Error changing password:', error);
+            alert(error.response?.data?.error || 'Failed to change password');
+        }
+    };
+
+    const handleUpdateInformation = async () => {
+        try {
+            const response = await axios.put(`${import.meta.env.VITE_API_URL}/auth/update-user`, {
+                fullName,
+                phoneNumber
+            }, { withCredentials: true });
+
+            const updatedUser = response.data.user;
+            setUser(updatedUser);
+            sessionStorage.setItem('user', JSON.stringify(updatedUser));
+            setFullName(updatedUser.fullName || '');
+            setPhoneNumber(updatedUser.phoneNumber || '');
+            alert('Information updated successfully');
+        } catch (error) {
+            console.error('Error updating information:', error);
+            alert(error.response?.data?.error || 'Failed to update information');
+        }
+    };
+
+    const handleBackToTable = () => {
+        setShowUserInfo(false);
+        setActiveUserTab('yourInformation');
+    };
+
     const renderPasswordTable = () => {
         console.log('Rendering password table with passwords:', passwords);
         return (
@@ -557,7 +628,7 @@ export default function HomePage() {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={7} style={{ textAlign: 'center', color: '#888' }}>
+                                <td colSpan="7" style={{ textAlign: 'center', color: '#888' }}>
                                     {loading ? 'Loading passwords...' : 'No passwords found.'}
                                 </td>
                             </tr>
@@ -568,7 +639,95 @@ export default function HomePage() {
         );
     };
 
+    const renderUserInfo = () => {
+        return (
+            <div className="homepage-main-body">
+                <div className="user-info-menu-bar">
+                    <div
+                        className={`user-info-menu-item ${activeUserTab === 'yourInformation' ? 'active' : ''}`}
+                        onClick={() => setActiveUserTab('yourInformation')}
+                    >
+                        Your Information
+                    </div>
+                    <div
+                        className={`user-info-menu-item ${activeUserTab === 'changePassword' ? 'active' : ''}`}
+                        onClick={() => setActiveUserTab('changePassword')}
+                    >
+                        Change Password
+                    </div>
+                </div>
+                <div className="user-info-content centered">
+                    {activeUserTab === 'yourInformation' && (
+                        <>
+                            <div className="info-field">
+                                <label>Email:</label>
+                                <input type="text" value={user?.email || 'N/A'} readOnly />
+                            </div>
+                            <div className="info-field">
+                                <label>Role:</label>
+                                <input type="text" value={user?.role || 'N/A'} readOnly />
+                            </div>
+                            <div className="info-field">
+                                <label>Full Name:</label>
+                                <input
+                                    type="text"
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                    className="editable"
+                                />
+                            </div>
+                            <div className="info-field">
+                                <label>Phone Number:</label>
+                                <input
+                                    type="text"
+                                    value={phoneNumber}
+                                    onChange={(e) => setPhoneNumber(e.target.value)}
+                                    className="editable"
+                                />
+                            </div>
+                            <div className="info-field">
+                                <label>Number of Personal Passwords:</label>
+                                <input type="text" value={personalPasswordCount} readOnly />
+                            </div>
+                            <div className="info-field">
+                                <label>Number of Shared Passwords:</label>
+                                <input type="text" value={sharedPasswordCount} readOnly />
+                            </div>
+                            <div className="button-group">
+                                <button onClick={handleBackToTable}>Back to table password</button>
+                                <button onClick={handleUpdateInformation}>Update information</button>
+                            </div>
+                        </>
+                    )}
+                    {activeUserTab === 'changePassword' && (
+                        <>
+                            <div className="info-field">
+                                <label>Current Password:</label>
+                                <input type="password" id="currentPassword" placeholder="Your Current Password" />
+                            </div>
+                            <div className="info-field">
+                                <label>New Password:</label>
+                                <input type="password" id="newPassword" placeholder="New Password" />
+                            </div>
+                            <div className="info-field">
+                                <label>Confirm New Password:</label>
+                                <input type="password" id="confirmPassword" placeholder="Confirm New Password" />
+                            </div>
+                            <div className="button-group">
+                                <button onClick={handleBackToTable}>Back to table password</button>
+                                <button onClick={handleChangePassword}>Change</button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     const renderMainContent = () => {
+        if (showUserInfo) {
+            return renderUserInfo();
+        }
         switch (activePage) {
             case 'createPassword':
                 return <CreatePassword onPasswordAdded={fetchPasswords} editingPassword={editingPassword} onPasswordUpdated={handlePasswordUpdated} />;
@@ -627,7 +786,7 @@ export default function HomePage() {
                             className="homepage-search-input"
                         />
                     </div>
-                    <div className="homepage-icon-button"><FaUser size={20} /></div>
+                    <div className="homepage-icon-button" onClick={() => setShowUserInfo(!showUserInfo)}><FaUser size={20} /></div>
                     <div className="homepage-icon-button notification-container">
                         <FaBell size={20} onClick={toggleNotifications} />
                         {unreadNotificationsCount > 0 && (

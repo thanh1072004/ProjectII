@@ -35,14 +35,24 @@ router.get('/check-user', async (req, res) => {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         console.log('Token decoded:', { id: decoded.id, email: decoded.email, role: decoded.role });
-        const user = await User.findById(decoded.id).select('email role publicKey encryptedPrivateKey');
+        const user = await User.findById(decoded.id).select('email role publicKey encryptedPrivateKey fullName phoneNumber');
         if (!user) {
             console.error('User not found for ID:', decoded.id);
             return res.status(404).json({ error: 'User not found' });
         }
 
-        console.log('User found for /check-user:', { email: user.email, role: user.role });
-        res.json({ user });
+        console.log('User found for /check-user:', { email: user.email, role: user.role, fullName: user.fullName, phoneNumber: user.phoneNumber });
+        res.json({ 
+            user: {
+                id: user._id,
+                email: user.email,
+                role: user.role,
+                publicKey: user.publicKey,
+                encryptedPrivateKey: user.encryptedPrivateKey,
+                fullName: user.fullName,
+                phoneNumber: user.phoneNumber
+            }
+        });
     } catch (err) {
         console.error('Error in /check-user:', {
             message: err.message,
@@ -74,7 +84,9 @@ router.post('/login', async (req, res) => {
             email: user.email,
             role: user.role,
             hasPublicKey: !!user.publicKey,
-            hasEncryptedPrivateKey: !!user.encryptedPrivateKey
+            hasEncryptedPrivateKey: !!user.encryptedPrivateKey,
+            fullName: user.fullName,
+            phoneNumber: user.phoneNumber
         });
 
         const isMatch = await bcrypt.compare(password, user.password);
@@ -118,11 +130,19 @@ router.post('/login', async (req, res) => {
                 email: user.email,
                 role: user.role,
                 publicKey: user.publicKey,
-                encryptedPrivateKey: user.encryptedPrivateKey
+                encryptedPrivateKey: user.encryptedPrivateKey,
+                fullName: user.fullName,
+                phoneNumber: user.phoneNumber
             },
             token
         });
-        console.log('Login response sent:', { email, role, publicKey: !!user.publicKey });
+        console.log('Login response sent:', { 
+            email, 
+            role, 
+            publicKey: !!user.publicKey,
+            fullName: user.fullName,
+            phoneNumber: user.phoneNumber
+        });
     } catch (err) {
         console.error('Login error:', {
             message: err.message,
@@ -291,14 +311,14 @@ router.post('/verify-code', async (req, res) => {
             maxAge: 60 * 60 * 1000
         });
 
-        res.status(200).json({
+        res.json({
             message: 'Registration successful',
             user: {
                 id: newUser._id,
                 email: newUser.email,
                 role: newUser.role,
                 publicKey: newUser.publicKey,
-                encryptedPrivateKey: newUser.encryptedPrivateKey
+                encryptedPrivateKey: userData.encryptedPrivateKey
             },
             privateKey
         });
@@ -409,6 +429,115 @@ router.post('/register', async (req, res) => {
             role
         });
         res.status(500).json({ error: 'Internal server error: ' + err.message });
+    }
+});
+
+router.put('/update-user', async (req, res) => {
+    const { fullName, phoneNumber } = req.body;
+    console.log('Update user information attempt:', { fullName, phoneNumber });
+
+    try {
+        const token = req.cookies.accessToken || req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            console.error('No token provided in /update-user');
+            return res.status(401).json({ error: 'No token provided' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id);
+        if (!user) {
+            console.error('User not found for ID:', decoded.id);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        user.fullName = fullName || user.fullName;
+        user.phoneNumber = phoneNumber || user.phoneNumber;
+        await user.save();
+
+        console.log('User information updated successfully for:', decoded.email);
+        res.json({ 
+            message: 'Information updated successfully',
+            user: {
+                id: user._id,
+                email: user.email,
+                role: user.role,
+                publicKey: user.publicKey,
+                encryptedPrivateKey: user.encryptedPrivateKey,
+                fullName: user.fullName,
+                phoneNumber: user.phoneNumber
+            }
+        });
+    } catch (err) {
+        console.error('Error updating user information:', {
+            message: err.message,
+            stack: err.stack
+        });
+        res.status(500).json({ error: 'Failed to update information: ' + err.message });
+    }
+});
+
+router.post('/change-password', async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    console.log('Change password attempt:', {
+        hasCurrentPassword: !!currentPassword,
+        hasNewPassword: !!newPassword
+    });
+
+    try {
+        const token = req.cookies.accessToken || req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            console.error('No token provided in /change-password');
+            return res.status(401).json({ error: 'No token provided' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log('Token decoded:', { id: decoded.id, email: decoded.email });
+
+        const user = await User.findById(decoded.id);
+        if (!user) {
+            console.error('User not found for ID:', decoded.id);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            console.error('Invalid current password for user:', user.email);
+            return res.status(401).json({ error: 'Invalid current password' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+        console.log('New password hashed for user:', user.email);
+
+        user.password = hashedPassword;
+
+        try {
+            const { publicKey, privateKey } = await generateECDHKeyPair();
+            const encryptedPrivateKey = await encryptPrivateKey(privateKey, newPassword);
+            user.publicKey = publicKey;
+            user.encryptedPrivateKey = JSON.parse(encryptedPrivateKey);
+            console.log('Generated new key pair and encrypted private key for:', user.email);
+        } catch (err) {
+            console.error('Failed to update encrypted private key:', err.message);
+            return res.status(500).json({ error: 'Failed to update encryption keys' });
+        }
+
+        await user.save();
+        console.log('User password updated successfully:', user.email);
+
+        res.clearCookie('accessToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+        });
+
+        res.json({ message: 'Password changed successfully. Please log in again.' });
+    } catch (err) {
+        console.error('Change password error:', {
+            message: err.message,
+            stack: err.stack
+        });
+        res.status(500).json({ error: 'Failed to change password: ' + err.message });
     }
 });
 

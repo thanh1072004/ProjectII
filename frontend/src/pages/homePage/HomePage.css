@@ -101,7 +101,6 @@
   color: #333;
 }
 
-
 .homepage-icon-button {
   margin-left: 20px;
   cursor: pointer;
@@ -117,6 +116,9 @@
 
 .homepage-main-body {
   padding: 40px 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .homepage-section-title {
@@ -278,4 +280,99 @@
 .notification-dropdown small {
   color: #888;
   font-size: 12px;
+}
+
+/* Thêm style cho user info overlay */
+.user-info-menu-bar {
+  background-color: #4caf50;
+  display: flex;
+  justify-content: space-around;
+  width: 540px;
+  padding: 10px 0;
+  border-radius: 6px 6px 0 0;
+  color: white;
+}
+
+.user-info-menu-item {
+  cursor: pointer;
+  padding: 10px 20px;
+  text-align: center;
+  flex-grow: 1;
+  transition: background-color 0.3s ease;
+}
+
+.user-info-menu-item:hover {
+  background-color: #388e3c;
+}
+
+.user-info-menu-item.active {
+  background-color: #2e7d32;
+}
+
+.user-info-content {
+  background-color: white;
+  padding: 20px;
+  width: 500px; /* Độ rộng cố định để dễ căn giữa */
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  text-align: left;
+}
+
+.user-info-content.centered {
+  margin: 0 auto; /* Căn giữa theo chiều ngang */
+}
+
+.user-info-content p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.user-info-content .info-field {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.user-info-content .info-field label {
+  width: 150px;
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.user-info-content .info-field input {
+  flex-grow: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+.user-info-content .info-field input[readOnly] {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+.user-info-content .info-field input.editable {
+  background-color: white;
+  cursor: text;
+}
+
+.user-info-content .button-group {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.user-info-content button {
+  background-color: #4caf50;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.user-info-content button:hover {
+  background-color: #388e3c;
 }

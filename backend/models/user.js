@@ -275,6 +275,17 @@ const userSchema = new Schema({
             message: 'Invalid encryptedPrivateKey format. Must contain salt, iv, ciphertext, and authTag as strings.'
         }
     },
+    fullName: {
+        type: String,
+        trim: true,
+        maxlength: [100, 'Full name cannot exceed 100 characters']
+    },
+    phoneNumber: {
+        type: String,
+        trim: true,
+        match: [/^\+?[\d\s-]{10,15}$/, 'Invalid phone number format'],
+        maxlength: [15, 'Phone number cannot exceed 15 characters']
+    },
     personalPasswordTable: [passwordEntrySchema],
     sharedPasswordTable: [sharedPasswordSchema],
     notifications: [notificationSchema]
