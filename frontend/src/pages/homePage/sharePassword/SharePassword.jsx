@@ -60,7 +60,6 @@ export default function SharePassword() {
                 privateKey
             );
             
-            // Store the decrypted password
             setDecryptedPasswords(prev => ({
                 ...prev,
                 [passwordEntry._id]: decryptedPassword
@@ -81,7 +80,6 @@ export default function SharePassword() {
         setIsSharing(true);
 
         try {
-            // Get recipient's public key
             const keyResponse = await axios.get(
                 `${import.meta.env.VITE_API_URL}/employee/users/${recipientEmail}/public-key`
             );
@@ -93,26 +91,23 @@ export default function SharePassword() {
                 throw new Error('Recipient public key not found');
             }
 
-            // Get the selected password
             const selectedPassword = userPasswords.find(p => p.id === selectedPasswordId);
             if (!selectedPassword) {
                 throw new Error('Selected password not found');
             }
             
-            // Get the plain password (you'll need to decrypt it first if it's encrypted)
+            // Get the plain password (need to decrypt it first if it's encrypted)
             const plainPassword = await decryptPassword(selectedPassword);
             if (!plainPassword) {
                 throw new Error('Password data not available. Please decrypt the password first.');
             }
         
-            // Encrypt using simple E2E encryption
             const encryptedPasswordData = await encryptPasswordForSharing(
                 plainPassword,
                 recipientPublicKey
             );
             
 
-            // Send to server
             const response = await axios.post(
                 `${import.meta.env.VITE_API_URL}/employee/share-password`,
                 {

@@ -69,7 +69,7 @@ export default function CreatePassword({ onPasswordAdded, editingPassword, onPas
 
             console.log('User role:', user.role);
 
-            // Mã hóa mật khẩu bằng publicKey của user
+            // encryption publicKey of user
             const encrypted_password = await encryptWithPublicKey(
                 formData.password,
                 user.publicKey
@@ -83,12 +83,11 @@ export default function CreatePassword({ onPasswordAdded, editingPassword, onPas
                 encrypted_password
             };
 
-            // Nếu là manager, thêm plainPassword mã hóa bằng AES tạm thời
+            // if manager, add plainPassword encrypted by AES temp
             if (user.role === 'manager') {
                 try {
                     const tempAESKey = await generateTempAESKey();
                     const encryptedPlainPassword = await encryptWithAES(formData.password, tempAESKey);
-                    // Kiểm tra định dạng
                     if (!tempAESKey || typeof tempAESKey !== 'string') {
                         throw new Error('Invalid tempAESKey format');
                     }
@@ -114,7 +113,6 @@ export default function CreatePassword({ onPasswordAdded, editingPassword, onPas
 
             let res;
             if (editingPassword) {
-                // Chế độ chỉnh sửa
                 const apiEndpoint = user.role === 'manager'
                     ? `${import.meta.env.VITE_API_URL}/manager/passwords/${editingPassword.id}`
                     : `${import.meta.env.VITE_API_URL}/employee/passwords/${editingPassword.id}`;
@@ -130,7 +128,6 @@ export default function CreatePassword({ onPasswordAdded, editingPassword, onPas
                     onPasswordUpdated();
                 }
             } else {
-                // Chế độ tạo mới
                 const apiEndpoint = user.role === 'manager'
                     ? `${import.meta.env.VITE_API_URL}/manager/add-password`
                     : `${import.meta.env.VITE_API_URL}/employee/add-password`;
@@ -147,7 +144,6 @@ export default function CreatePassword({ onPasswordAdded, editingPassword, onPas
                 }
             }
 
-            // Reset form
             setFormData({
                 name: '',
                 website: '',

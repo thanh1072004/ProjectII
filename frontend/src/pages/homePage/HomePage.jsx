@@ -68,7 +68,7 @@ export default function HomePage() {
                     navigate('/login');
                 }
             } else {
-                // Gọi API để lấy thông tin người dùng mới nhất
+                // API to fetch new user infor
                 try {
                     console.log('No stored session, checking user with API');
                     const response = await axios.get(`${import.meta.env.VITE_API_URL}/auth/check-user`, {

@@ -5,7 +5,6 @@ const Company = require('../models/company');
 const { requireManager } = require('./helper');
 const { encryptPasswordForSharing, decryptWithAES } = require('../utils/cryptoUtils');
 
-// Route để lấy danh sách mật khẩu của manager hoặc employee
 router.get('/passwords', async (req, res) => {
     try {
         console.log('Fetching passwords for user:', req.user.email, 'Role:', req.user.role);
@@ -25,7 +24,6 @@ router.get('/passwords', async (req, res) => {
     }
 });
 
-// Route để manager tạo mật khẩu mới và chia sẻ với tất cả employee
 router.post('/add-password', requireManager, async (req, res) => {
     const { name, website, username, encrypted_password, tempAESKey, encryptedPlainPassword } = req.body;
 
@@ -40,13 +38,11 @@ router.post('/add-password', requireManager, async (req, res) => {
             encryptedPlainPassword: typeof encryptedPlainPassword === 'string' ? encryptedPlainPassword.substring(0, 50) + '...' : encryptedPlainPassword
         });
 
-        // Validate input
         if (!name || !username || !encrypted_password || !tempAESKey || !encryptedPlainPassword) {
             console.error('Missing required fields:', { name, username, hasEncryptedPassword: !!encrypted_password, hasTempAESKey: !!tempAESKey, hasEncryptedPlainPassword: !!encryptedPlainPassword });
             return res.status(400).json({ error: 'Missing required fields: name, username, encrypted_password, tempAESKey, encryptedPlainPassword' });
         }
 
-        // Kiểm tra định dạng encrypted_password
         let parsedEncryptedPassword;
         try {
             parsedEncryptedPassword = typeof encrypted_password === 'string' ? JSON.parse(encrypted_password) : encrypted_password;
@@ -58,7 +54,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             return res.status(400).json({ error: 'Invalid encrypted_password format, must be valid JSON with ephemeralPublicKey, iv, ciphertext, and authTag' });
         }
 
-        // Kiểm tra định dạng encryptedPlainPassword
         let parsedEncryptedPlainPassword;
         try {
             parsedEncryptedPlainPassword = JSON.parse(encryptedPlainPassword);
@@ -70,7 +65,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             return res.status(400).json({ error: 'Invalid encryptedPlainPassword format, must be valid JSON with iv, ciphertext, and authTag' });
         }
 
-        // Lấy thông tin manager
         const manager = await User.findById(req.user.id);
         if (!manager) {
             console.error('Manager not found for ID:', req.user.id);
@@ -81,7 +75,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             return res.status(400).json({ error: 'Manager is missing publicKey or encryptedPrivateKey' });
         }
 
-        // Kiểm tra xem mật khẩu đã tồn tại trong personalPasswordTable chưa
         const existingEntry = manager.personalPasswordTable.find(
             entry => entry.name === name && entry.website === (website || '')
         );
@@ -90,7 +83,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             return res.status(400).json({ error: 'Password with the same name and website already exists' });
         }
 
-        // Tạo entry mật khẩu cho personalPasswordTable của manager
         const managerPasswordEntry = {
             name,
             website: website || '',
@@ -101,7 +93,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             sharedWith: []
         };
 
-        // Thêm vào personalPasswordTable của manager
         manager.personalPasswordTable.push(managerPasswordEntry);
         await manager.save();
         console.log('Saved managerPasswordEntry to personalPasswordTable:', {
@@ -113,7 +104,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             encryptedPlainPassword: encryptedPlainPassword.substring(0, 50) + '...'
         });
 
-        // Lưu mật khẩu vào Company.passwordTables
         let company = await Company.findOne();
         if (!company) {
             company = new Company({ passwordTables: [], Authenticated: [] });
@@ -127,7 +117,6 @@ router.post('/add-password', requireManager, async (req, res) => {
         await company.save();
         console.log('Saved to Company.passwordTables:', { name, website: website || '', username });
 
-        // Lấy tất cả user có role 'employee'
         const employees = await User.find({ role: 'employee' });
         console.log('Found employees:', employees.length, 'Employee emails:', employees.map(e => e.email));
         if (employees.length === 0) {
@@ -140,7 +129,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             return;
         }
 
-        // Giải mã plainPassword từ encryptedPlainPassword
         let plainPassword;
         try {
             console.log('Attempting to decrypt plainPassword with tempAESKey:', tempAESKey.substring(0, 20) + '...');
@@ -151,7 +139,6 @@ router.post('/add-password', requireManager, async (req, res) => {
             return res.status(400).json({ error: `Failed to decrypt plainPassword: ${decryptError.message}` });
         }
 
-        // Thêm mật khẩu vào sharedPasswordTable của tất cả employee
         let sharedCount = 0;
         const skippedEmployees = [];
         const updatePromises = employees.map(async (employee) => {
@@ -181,7 +168,7 @@ router.post('/add-password', requireManager, async (req, res) => {
                 name,
                 website: website || '',
                 username,
-                encrypted_password: employeeEncryptedPassword, // Lưu dưới dạng object
+                encrypted_password: employeeEncryptedPassword, 
                 sharedBy: manager.email
             };
 
@@ -216,7 +203,6 @@ router.post('/add-password', requireManager, async (req, res) => {
 
         await Promise.all(updatePromises);
 
-        // Cập nhật sharedWith trong manager's personalPasswordTable
         await manager.save();
 
         if (skippedEmployees.length > 0) {

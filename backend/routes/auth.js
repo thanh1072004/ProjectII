@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/user'); // Import User làm default
-const { VerificationCode } = require('../models/user'); // Import VerificationCode làm named export
+const User = require('../models/user'); 
+const { VerificationCode } = require('../models/user'); 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
@@ -170,40 +170,35 @@ router.post('/send-verification-code', async (req, res) => {
     console.log('Send verification code attempt:', { email, role, hasPassword: !!password, code });
 
     try {
-        // Validate email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$|^thanhkudo@123$/;
         if (!emailRegex.test(email)) {
             console.error('Invalid email format:', email);
             return res.status(400).json({ error: 'Invalid email format' });
         }
 
-        // Kiểm tra người dùng tồn tại
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             console.error('Email already exists:', email);
             return res.status(403).json({ error: 'Email already registered, please login' });
         }
 
-        // Kiểm tra vai trò hợp lệ
         if (!['employee', 'manager'].includes(role)) {
             console.error('Invalid role:', role);
             return res.status(400).json({ error: 'Invalid role' });
         }
 
-        // Kiểm tra mã bí mật cho manager
         if (role === 'manager' && code !== process.env.VITE_SECRET_CODE) {
             console.error('Invalid secret code:', code);
             return res.status(400).json({ error: 'Invalid secret code for manager' });
         }
 
-        // Tạo cặp khóa ECDH
+        // generate key pair ECDH
         const { publicKey, privateKey } = await generateECDHKeyPair();
         console.log('Generated key pair:', {
             publicKey: publicKey.substring(0, 20) + '...',
             privateKey: privateKey.substring(0, 20) + '...'
         });
 
-        // Mã hóa privateKey
         let encryptedPrivateKey;
         try {
             const rawEncryptedPrivateKey = await encryptPrivateKey(privateKey, password);
@@ -219,12 +214,10 @@ router.post('/send-verification-code', async (req, res) => {
             return res.status(500).json({ error: 'Failed to encrypt private key' });
         }
 
-        // Hash mật khẩu
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
         console.log('Password hashed for:', email);
 
-        // Tạo mã xác thực
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
         await VerificationCode.findOneAndUpdate(
             { email },
@@ -242,7 +235,6 @@ router.post('/send-verification-code', async (req, res) => {
             { upsert: true, new: true }
         );
 
-        // Gửi email
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: email,
@@ -341,40 +333,34 @@ router.post('/register', async (req, res) => {
     });
 
     try {
-        // Validate email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$|^thanhkudo@123$/;
         if (!emailRegex.test(email)) {
             console.error('Invalid email format:', email);
             return res.status(400).json({ error: 'Invalid email format' });
         }
 
-        // Kiểm tra người dùng tồn tại
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             console.error('Email already exists:', email);
             return res.status(403).json({ error: 'Email already registered, please login' });
         }
 
-        // Kiểm tra vai trò hợp lệ
         if (!['employee', 'manager'].includes(role)) {
             console.error('Invalid role:', role);
             return res.status(400).json({ error: 'Invalid role' });
         }
 
-        // Kiểm tra mã bí mật cho manager
         if (role === 'manager' && code !== process.env.VITE_SECRET_CODE) {
             console.error('Invalid secret code:', code);
             return res.status(400).json({ error: 'Invalid secret code for manager' });
         }
 
-        // Tạo cặp khóa ECDH
         const { publicKey, privateKey } = await generateECDHKeyPair();
         console.log('Generated key pair:', {
             publicKey: publicKey.substring(0, 20) + '...',
             privateKey: privateKey.substring(0, 20) + '...'
         });
 
-        // Mã hóa privateKey
         let encryptedPrivateKey;
         try {
             const rawEncryptedPrivateKey = await encryptPrivateKey(privateKey, password);
@@ -390,12 +376,10 @@ router.post('/register', async (req, res) => {
             return res.status(500).json({ error: 'Failed to encrypt private key' });
         }
 
-        // Hash mật khẩu
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
         console.log('Password hashed for:', email);
 
-        // Tạo người dùng
         const newUser = new User({
             role,
             email,

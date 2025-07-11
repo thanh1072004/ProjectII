@@ -2,12 +2,10 @@ const crypto = require('crypto');
 const util = require('util');
 const generateKeyPair = util.promisify(crypto.generateKeyPair);
 
-// Chuyển đổi Buffer thành Base64
 const arrayBufferToBase64 = (buffer) => {
     return buffer.toString('base64');
 };
 
-// Chuyển đổi Base64 thành Buffer
 const base64ToBuffer = (base64) => {
     try {
         if (!base64 || typeof base64 !== 'string') {
@@ -24,7 +22,7 @@ const base64ToBuffer = (base64) => {
     }
 };
 
-// Tạo cặp khóa ECDH với P-256
+// generate key pair ECDH with P-256
 const generateECDHKeyPair = async () => {
     try {
         const { publicKey, privateKey } = await generateKeyPair('ec', {
@@ -42,7 +40,6 @@ const generateECDHKeyPair = async () => {
     }
 };
 
-// Mã hóa private key với mật khẩu
 const encryptPrivateKey = (privateKey, password) => {
     try {
         console.log('Encrypting private key with password');
@@ -79,7 +76,6 @@ const encryptPrivateKey = (privateKey, password) => {
     }
 };
 
-// Nhập public key
 const importPublicKey = async (publicKeyString) => {
     try {
         let keyBuffer;
@@ -109,7 +105,6 @@ const importPublicKey = async (publicKeyString) => {
             type: 'spki'
         });
 
-        // Kiểm tra xem publicKey có đúng là P-256 không
         const keyDetails = publicKey.asymmetricKeyDetails;
         if (keyDetails?.namedCurve !== 'prime256v1') {
             throw new Error(`Public key is not valid for P-256 curve, found: ${keyDetails?.namedCurve || 'unknown'}`);
@@ -126,7 +121,6 @@ const importPublicKey = async (publicKeyString) => {
     }
 };
 
-// Mã hóa mật khẩu để chia sẻ
 const encryptPasswordForSharing = async (password, publicKeyString) => {
     try {
         console.log('Encrypting password with publicKey:', publicKeyString.substring(0, 20) + '...');
@@ -179,7 +173,6 @@ const encryptPasswordForSharing = async (password, publicKeyString) => {
     }
 };
 
-// Giải mã mật khẩu được chia sẻ
 const decryptSharedPassword = async (encryptedData, privateKeyString) => {
     try {
         const { ephemeralPublicKey, iv, ciphertext, authTag } = encryptedData;
@@ -219,7 +212,6 @@ const decryptSharedPassword = async (encryptedData, privateKeyString) => {
     }
 };
 
-// Tạo khóa AES tạm thời
 const generateTempAESKey = async () => {
     try {
         const key = crypto.randomBytes(32);
@@ -230,7 +222,6 @@ const generateTempAESKey = async () => {
     }
 };
 
-// Mã hóa bằng AES
 const encryptWithAES = async (data, key) => {
     try {
         const iv = crypto.randomBytes(12);
@@ -250,7 +241,6 @@ const encryptWithAES = async (data, key) => {
     }
 };
 
-// Giải mã bằng AES
 const decryptWithAES = async (encryptedData, key) => {
     try {
         const { iv, ciphertext, authTag } = JSON.parse(encryptedData);

@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-// Schema cho thông báo
 const notificationSchema = new Schema({
     message: {
         type: String,
@@ -35,7 +34,6 @@ const notificationSchema = new Schema({
     }
 }, { _id: true });
 
-// Schema cho mật khẩu cá nhân (personalPasswordTable)
 const passwordEntrySchema = new Schema({
     name: {
         type: String,
@@ -110,7 +108,6 @@ const passwordEntrySchema = new Schema({
     }
 }, { _id: true });
 
-// Schema cho mật khẩu được chia sẻ (sharedPasswordTable)
 const sharedPasswordSchema = new Schema({
     name: {
         type: String,
@@ -154,7 +151,6 @@ const sharedPasswordSchema = new Schema({
     }
 }, { _id: true, timestamps: true });
 
-// Schema cho mã xác thực
 const verificationCodeSchema = new Schema({
     email: {
         type: String,
@@ -215,7 +211,7 @@ const verificationCodeSchema = new Schema({
     createdAt: {
         type: Date,
         default: Date.now,
-        expires: '15m' // Mã hết hạn sau 15 phút
+        expires: '15m' 
     }
 });
 
@@ -293,13 +289,12 @@ const userSchema = new Schema({
     timestamps: true
 });
 
-// Thêm indexes để tối ưu hóa tìm kiếm
+// add indexes to optimize
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 
 const User = mongoose.model('User', userSchema);
 const VerificationCode = mongoose.model('VerificationCode', verificationCodeSchema);
 
-// Export User làm default, VerificationCode làm named export
 module.exports = User;
 module.exports.VerificationCode = VerificationCode;

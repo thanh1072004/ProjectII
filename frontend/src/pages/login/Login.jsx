@@ -23,72 +23,69 @@ export default function Login() {
 
         try {
             if (isManager && code !== import.meta.env.VITE_SECRET_CODE) {
-                console.error('Mã bí mật không đúng:', code);
-                alert('Mã bí mật không đúng');
+                console.error('Secret code incorrect:', code);
+                alert('Secret code incorrect');
                 return;
             }
 
-            console.log('Gửi yêu cầu đăng nhập:', { email, role, password: '****' });
+            console.log('Send login request:', { email, role, password: '****' });
             const res = await axios.post(
                 `${import.meta.env.VITE_API_URL}/auth/login`,
-                { email, password, role }, // Thêm role vào body
+                { email, password, role }, 
                 { withCredentials: true }
             );
 
-            console.log('Phản hồi từ API đăng nhập:', res.data);
+            console.log('Response from login API:', res.data);
 
             const { user: loginUser, privateKey, token } = res.data;
             if (!loginUser) {
-                console.error('Phản hồi API thiếu thông tin người dùng');
-                alert('Dữ liệu người dùng không hợp lệ từ máy chủ');
+                console.error('API response missing user information');
+                alert('Invalid user data');
                 return;
             }
 
             if (!privateKey && !loginUser.encryptedPrivateKey) {
-                console.error('Thiếu encryptedPrivateKey hoặc privateKey trong phản hồi');
-                alert('Khóa riêng mã hóa không có trong dữ liệu người dùng');
+                console.error('Missing encryptedPrivateKey or privateKey in response');
+                alert('The encryption private key is not present in the user data');
                 return;
             }
 
-            // Nếu backend không trả về privateKey đã giải mã, giải mã ở frontend
             let finalPrivateKey = privateKey;
             if (!privateKey && loginUser.encryptedPrivateKey) {
-                console.log('Đang giải mã khóa riêng với encryptedPrivateKey:', loginUser.encryptedPrivateKey);
+                console.log('Decrypting the private key with encryptedPrivateKey:', loginUser.encryptedPrivateKey);
                 try {
                     finalPrivateKey = await decryptPrivateKey(loginUser.encryptedPrivateKey, password);
-                    console.log('Giải mã khóa riêng thành công');
+                    console.log('Private key decryption successful');
                 } catch (decryptError) {
-                    console.error('Lỗi giải mã khóa riêng:', decryptError.message);
-                    alert('Không thể giải mã khóa riêng. Vui lòng kiểm tra mật khẩu.');
+                    console.error('Private key decryption error:', decryptError.message);
+                    alert('Unable to decrypt private key. Please check password.');
                     return;
                 }
             }
 
-            // Lưu thông tin vào sessionStorage
             sessionStorage.setItem('user', JSON.stringify(loginUser));
             sessionStorage.setItem('privateKey', finalPrivateKey);
             sessionStorage.setItem('accessToken', token || '');
 
-            // Cập nhật context
             setUser(loginUser);
             setPrivateKey(finalPrivateKey);
 
-            console.log('Đăng nhập thành công:', { user: loginUser.email, role: loginUser.role });
-            alert(res.data.message || 'Đăng nhập thành công');
+            console.log('Login successfully:', { user: loginUser.email, role: loginUser.role });
+            alert(res.data.message || 'Login successfully');
             navigate(loginUser.role === 'manager' ? '/manager' : '/dashboard');
         } catch (err) {
-            console.error('Lỗi đăng nhập:', {
+            console.error('Login error:', {
                 message: err.message,
                 response: err.response?.data,
                 status: err.response?.status
             });
-            let errorMessage = 'Đăng nhập thất bại. Vui lòng kiểm tra email, mật khẩu hoặc vai trò.';
+            let errorMessage = 'Login failed. Please check your email, password or role.';
             if (err.response?.status === 401) {
-                errorMessage = 'Email, mật khẩu hoặc vai trò không đúng.';
+                errorMessage = 'Incorrect email, password or role.';
             } else if (err.response?.status === 400) {
-                errorMessage = err.response.data.error || 'Yêu cầu không hợp lệ.';
-            } else if (err.message.includes('giải mã khóa riêng')) {
-                errorMessage = 'Không thể giải mã khóa riêng. Vui lòng kiểm tra mật khẩu.';
+                errorMessage = err.response.data.error || 'Invalid request.';
+            } else if (err.message.includes('decrypt the private key')) {
+                errorMessage = 'Unable to decrypt private key. Please check password.';
             }
             alert(errorMessage);
         }

@@ -7,7 +7,6 @@ const dotenv = require('dotenv').config();
 const wss = new WebSocket.Server({ port: 4000 });
 const uri = process.env.MONGO_URL;
 
-// Dùng key cố định để đảm bảo giải mã được cả lịch sử
 const SECRET_KEY = Buffer.from(process.env.CHAT_SECRET_KEY, 'base64');
 
 function encrypt(text) {
@@ -29,8 +28,7 @@ function decrypt(data) {
 
 wss.on('connection', async function connection(ws) {
   try {
-    // Gửi lại lịch sử tin nhắn cho client mới
-    const recentMessages = await Message.find().sort({ timestamp: 1 }).limit(50); // có thể bỏ limit nếu muốn
+    const recentMessages = await Message.find().sort({ timestamp: 1 }).limit(50); 
     recentMessages.forEach(msg => {
       const plain = `${msg.sender}:${msg.content}`;
       const encrypted = encrypt(plain);
@@ -42,15 +40,12 @@ wss.on('connection', async function connection(ws) {
 
   ws.on('message', async function incoming(message) {
     try {
-      // Giải mã tin nhắn nhận được
-      const decrypted = decrypt(message.toString()); // e.g., "Alice:Hello"
+      const decrypted = decrypt(message.toString()); 
       const [sender, ...rest] = decrypted.split(':');
       const content = rest.join(':').trim();
 
-      // Lưu vào MongoDB
       await Message.create({ sender, content });
 
-      // Gửi lại cho tất cả client (giữ nguyên bản đã mã hóa)
       wss.clients.forEach(function each(client) {
         if (client.readyState === WebSocket.OPEN) {
           client.send(message);

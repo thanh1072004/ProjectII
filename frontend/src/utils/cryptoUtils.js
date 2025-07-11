@@ -1,13 +1,11 @@
 const sessions = new Map();
 
-// Chuyển đổi ArrayBuffer thành base64
 const arrayBufferToBase64 = (buffer) => {
     const bytes = new Uint8Array(buffer);
     const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
     return btoa(binary);
 };
 
-// Chuyển đổi base64 thành ArrayBuffer
 const base64ToArrayBuffer = (base64) => {
     try {
         if (!base64 || typeof base64 !== 'string') {
@@ -29,7 +27,6 @@ const base64ToArrayBuffer = (base64) => {
     }
 };
 
-// Tạo khóa AES tạm thời
 export const generateTempAESKey = async () => {
     try {
         const key = await window.crypto.subtle.generateKey(
@@ -48,7 +45,6 @@ export const generateTempAESKey = async () => {
     }
 };
 
-// Mã hóa bằng AES-GCM
 export const encryptWithAES = async (data, key) => {
     try {
         if (!data || !key) {
@@ -76,7 +72,7 @@ export const encryptWithAES = async (data, key) => {
         );
 
         const encryptedArray = new Uint8Array(encryptedData);
-        const authTag = encryptedArray.slice(-16); // AES-GCM auth tag là 16 bytes
+        const authTag = encryptedArray.slice(-16); 
         const ciphertext = encryptedArray.slice(0, -16);
 
         return JSON.stringify({
@@ -90,7 +86,6 @@ export const encryptWithAES = async (data, key) => {
     }
 };
 
-// Tạo cặp khóa ECDH với P-256
 export const generateECDHKeyPair = async () => {
     try {
         const keyPair = await window.crypto.subtle.generateKey(
@@ -158,7 +153,7 @@ export const encryptPrivateKey = async (privateKey, password) => {
         );
         
         const encryptedArray = new Uint8Array(encryptedData);
-        const authTag = encryptedArray.slice(-16); // AES-GCM auth tag là 16 bytes
+        const authTag = encryptedArray.slice(-16); 
         const ciphertext = encryptedArray.slice(0, -16);
         
         return JSON.stringify({
@@ -173,24 +168,23 @@ export const encryptPrivateKey = async (privateKey, password) => {
     }
 };
 
-// Giải mã private key
 export const decryptPrivateKey = async (encryptedPrivateKey, password) => {
     try {
         let data;
         try {
             data = typeof encryptedPrivateKey === 'string' ? JSON.parse(encryptedPrivateKey) : encryptedPrivateKey;
         } catch (parseError) {
-            console.error('Lỗi phân tích encryptedPrivateKey:', parseError.message);
-            throw new Error('Dữ liệu khóa riêng không hợp lệ: Không phải JSON hợp lệ');
+            console.error('Error parsing encryptedPrivateKey:', parseError.message);
+            throw new Error('Invalid private key data: Not valid JSON');
         }
 
         const { iv, ciphertext, authTag, salt } = data;
         if (!iv || !ciphertext || !authTag || !salt) {
-            console.error('Dữ liệu mã hóa khóa riêng không hợp lệ:', data);
-            throw new Error('Thiếu iv, ciphertext, authTag hoặc salt trong dữ liệu mã hóa');
+            console.error('Invalid private key encryption data:', data);
+            throw new Error('Missing iv, ciphertext, authTag or salt in encrypted data');
         }
 
-        console.log('Dữ liệu mã hóa khóa riêng:', { iv, ciphertext, authTag, salt });
+        console.log('Private key encryption data:', { iv, ciphertext, authTag, salt });
 
         const passwordBuffer = new TextEncoder().encode(password);
         const keyMaterial = await window.crypto.subtle.importKey(
@@ -223,7 +217,7 @@ export const decryptPrivateKey = async (encryptedPrivateKey, password) => {
         combinedBuffer.set(new Uint8Array(ciphertextBuffer), 0);
         combinedBuffer.set(new Uint8Array(authTagBuffer), ciphertextBuffer.byteLength);
 
-        console.log('Kích thước buffer kết hợp:', combinedBuffer.length);
+        console.log('Combined buffer size:', combinedBuffer.length);
 
         const decryptedData = await window.crypto.subtle.decrypt(
             {
@@ -236,16 +230,16 @@ export const decryptPrivateKey = async (encryptedPrivateKey, password) => {
 
         const decoder = new TextDecoder();
         const privateKey = decoder.decode(decryptedData);
-        console.log('Khóa riêng đã giải mã:', privateKey.substring(0, 50) + '...');
+        console.log('Decrypted private key:', privateKey.substring(0, 50) + '...');
 
         return privateKey;
     } catch (error) {
-        console.error('Lỗi giải mã khóa riêng:', {
+        console.error('Private key decryption error:', {
             message: error.message,
             stack: error.stack,
             encryptedPrivateKey: JSON.stringify(encryptedPrivateKey, null, 2)
         });
-        throw new Error(`Không thể giải mã khóa riêng: ${error.message}`);
+        throw new Error(`Unable to decrypt private key: ${error.message}`);
     }
 };
 
@@ -343,7 +337,6 @@ export const importECDHPrivateKey = async (privateKeyString) => {
     }
 };
 
-// Mã hóa với public key
 export const encryptWithPublicKey = async (data, publicKeyString) => {
     try {
         console.log('Encrypting with publicKey:', publicKeyString.substring(0, 20) + '...');
@@ -382,7 +375,7 @@ export const encryptWithPublicKey = async (data, publicKeyString) => {
         );
         
         const encryptedArray = new Uint8Array(encryptedData);
-        const authTag = encryptedArray.slice(-16); // AES-GCM auth tag là 16 bytes
+        const authTag = encryptedArray.slice(-16); 
         const ciphertext = encryptedArray.slice(0, -16);
 
         const result = {
@@ -410,7 +403,6 @@ export const encryptWithPublicKey = async (data, publicKeyString) => {
     }
 };
 
-// Giải mã với private key
 export const decryptWithPrivateKey = async (encryptedData, privateKeyString) => {
     try {
         const data = typeof encryptedData === 'string' ? JSON.parse(encryptedData) : encryptedData;
@@ -467,7 +459,6 @@ export const decryptWithPrivateKey = async (encryptedData, privateKeyString) => 
     }
 };
 
-// Kiểm tra cặp khóa
 export const testKeyPair = async (publicKey, privateKey) => {
     try {
         const testMessage = "test-key-pair-validation";
@@ -490,7 +481,6 @@ export const testKeyPair = async (publicKey, privateKey) => {
     }
 };
 
-// Các hàm session và message giữ nguyên
 export const establishSession = async (myPrivateKey, theirPublicKey, sessionId) => {
     try {
         const privateKey = await importECDHPrivateKey(myPrivateKey);

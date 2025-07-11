@@ -35,14 +35,14 @@ export default function Register({ role: initialRole, onToggle, onBack }) {
         }
     
         if (password !== rePassword) {
-            console.error('Mật khẩu không khớp:', { password, rePassword });
-            setError('Vui lòng nhập lại mật khẩu cho khớp');
+            console.error('Password do not match:', { password, rePassword });
+            setError('Please re-enter password to match');
             return;
         }
     
         if (!email) {
-            console.error('Thiếu email');
-            setError('Email là bắt buộc');
+            console.error('Missing email');
+            setError('Email is required');
             return;
         }
     
@@ -50,25 +50,25 @@ export default function Register({ role: initialRole, onToggle, onBack }) {
         setError(null);
     
         try {
-            console.log('Gửi yêu cầu gửi mã xác thực:', { email, role, password: '****', code });
+            console.log('Send request to send verification code:', { email, role, password: '****', code });
             const res = await axios.post(
                 `${import.meta.env.VITE_API_URL}/auth/send-verification-code`,
                 { role, email, password, code: isManager ? code : undefined },
                 { withCredentials: true }
             );
     
-            console.log('Phản hồi từ API gửi mã:', res.data);
+            console.log('Response from API sending code:', res.data);
             setTempPrivateKey(res.data.privateKey);
             setIsCodeSent(true);
             setError(null);
-            alert('Mã xác thực đã được gửi tới email của bạn.');
+            alert('A verification code has been sent to your email.');
         } catch (err) {
-            console.error('Lỗi gửi mã xác thực:', {
+            console.error('Error sending verification code:', {
                 message: err.message,
                 response: err.response?.data,
                 status: err.response?.status
             });
-            setError(err.response?.data?.error || 'Gửi mã xác thực thất bại. Vui lòng thử lại.');
+            setError(err.response?.data?.error || 'Verification code sending failed. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -86,28 +86,28 @@ export default function Register({ role: initialRole, onToggle, onBack }) {
         setError(null);
 
         try {
-            console.log('Gửi yêu cầu xác thực mã:', { email, verificationCode });
+            console.log('Send code verification request:', { email, verificationCode });
             const res = await axios.post(
                 `${import.meta.env.VITE_API_URL}/auth/verify-code`,
                 { email, code: verificationCode, privateKey: tempPrivateKey },
                 { withCredentials: true }
             );
 
-            console.log('Phản hồi từ API xác thực:', res.data);
+            console.log('Response from the authentication API:', res.data);
             setUser(res.data.user);
             setPrivateKey(res.data.privateKey);
             sessionStorage.setItem('user', JSON.stringify(res.data.user));
             sessionStorage.setItem('privateKey', res.data.privateKey);
             sessionStorage.setItem('accessToken', res.data.token || '');
-            alert(res.data.message || 'Đăng ký thành công.');
+            alert(res.data.message || 'Sign up successfully');
             onBack ? onBack() : navigate('/home');
         } catch (err) {
-            console.error('Lỗi xác thực mã:', {
+            console.error('Code validation error:', {
                 message: err.message,
                 response: err.response?.data,
                 status: err.response?.status
             });
-            setError(err.response?.data?.error || 'Mã xác thực không hợp lệ hoặc đã hết hạn.');
+            setError(err.response?.data?.error || 'The verification code is invalid or has expired.');
         } finally {
             setIsSubmitting(false);
         }
@@ -138,7 +138,7 @@ export default function Register({ role: initialRole, onToggle, onBack }) {
                         <div className={`input-group company-group ${isManager ? 'visible' : 'hidden'}`}>
                             <i className="fas fa-building"></i>
                             <input
-                                type="text"
+                                type="password"
                                 placeholder="Company Secret Code"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}

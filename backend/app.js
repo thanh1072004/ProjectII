@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 
 const authRoutes = require('./routes/auth');
 const mainRoutes = require('./routes/employee');
-const managerRoutes = require('./routes/manager'); // Xác nhận đường dẫn đúng
+const managerRoutes = require('./routes/manager'); 
 
 const app = express();
 const uri = process.env.MONGO_URL;
@@ -21,7 +21,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Middleware kiểm tra token
+// Middleware to check token
 const authMiddleware = (req, res, next) => {
     const token = req.cookies.accessToken || req.headers.authorization?.split(' ')[1];
     console.log('authMiddleware triggered for path:', req.path, 'Token:', token ? 'present' : 'missing');
@@ -40,14 +40,10 @@ const authMiddleware = (req, res, next) => {
     }
 };
 
-// Route công khai
 app.use('/api/auth', authRoutes);
-
-// Route bảo vệ
 app.use('/api/employee', authMiddleware, mainRoutes);
 app.use('/api/manager', authMiddleware, managerRoutes);
 
-// Xử lý lỗi 404
 app.use((req, res) => {
     console.error('Route not found:', req.method, req.path);
     res.status(404).json({ error: 'Route not found' });

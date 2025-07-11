@@ -6,7 +6,7 @@ const RoleToggle = ({ onToggle }) => {
 
   const handleToggle = (newRole) => {
     setRole(newRole);
-    onToggle(newRole); // Gửi giá trị lên App.jsx
+    onToggle(newRole); 
   };
 
   return (

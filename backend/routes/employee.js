@@ -15,7 +15,6 @@ router.post('/add-password', requireAuth, async (req, res) => {
             encryptedPassword: typeof encrypted_password === 'string' ? encrypted_password.substring(0, 50) + '...' : encrypted_password
         });
 
-        // Validate input
         if (!name || !username || !encrypted_password) {
             console.error('Missing required fields:', { name, username, hasEncryptedPassword: !!encrypted_password });
             return res.status(400).json({ error: 'Missing required fields: name, username, encrypted_password' });
@@ -44,7 +43,6 @@ router.post('/add-password', requireAuth, async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized: Only employees can use this endpoint' });
         }
 
-        // Kiểm tra xem mật khẩu đã tồn tại chưa
         const existingEntry = user.personalPasswordTable.find(
             entry => entry.name === name && entry.website === (website || '')
         );
@@ -53,7 +51,6 @@ router.post('/add-password', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'Password with the same name and website already exists' });
         }
 
-        // Tạo entry mật khẩu
         const passwordEntry = {
             name,
             website: website || '',
@@ -250,7 +247,7 @@ router.post('/share-password', requireAuth, async (req, res) => {
             sharedBy: sender.email
         });
 
-        // Thêm thông báo cho người nhận
+        // notification with user
         recipient.notifications.push({
             message: `User ${sender.email} shared password ${name} with you`,
             type: 'password_shared',
@@ -359,13 +356,10 @@ router.delete('/passwords/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Kiểm tra và xóa từ personalPasswordTable
         const personalPassword = user.personalPasswordTable.id(id);
         if (personalPassword) {
             user.personalPasswordTable.pull(id);
             console.log('Removed personal password:', { id, name: personalPassword.name });
-
-            // Xóa email người dùng khỏi sharedWith của mật khẩu ở các người dùng khác
             const sharedWithUsers = await User.find({ 'personalPasswordTable.sharedWith': user.email });
             for (const sharedUser of sharedWithUsers) {
                 const sharedPassword = sharedUser.personalPasswordTable.find(pwd => pwd.sharedWith.includes(user.email));
@@ -379,7 +373,6 @@ router.delete('/passwords/:id', requireAuth, async (req, res) => {
             return res.json({ message: 'Personal password deleted successfully' });
         }
 
-        // Kiểm tra và xóa từ sharedPasswordTable
         const sharedPassword = user.sharedPasswordTable.id(id);
         if (sharedPassword) {
             user.sharedPasswordTable.pull(id);
@@ -402,13 +395,11 @@ router.put('/passwords/:id', requireAuth, async (req, res) => {
         const { id } = req.params;
         const { name, website, username, encrypted_password } = req.body;
 
-        // Validate input
         if (!name || !username || !encrypted_password) {
             console.error('Missing required fields:', { name, username, hasEncryptedPassword: !!encrypted_password });
             return res.status(400).json({ error: 'Missing required fields: name, username, encrypted_password' });
         }
 
-        // Parse và validate encrypted_password
         let parsedEncryptedPassword;
         try {
             parsedEncryptedPassword = typeof encrypted_password === 'string' ? JSON.parse(encrypted_password) : encrypted_password;
@@ -426,14 +417,12 @@ router.put('/passwords/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Kiểm tra mật khẩu trong personalPasswordTable
         const passwordEntry = user.personalPasswordTable.id(id);
         if (!passwordEntry) {
             console.error('Password not found for ID:', id);
             return res.status(404).json({ error: 'Password not found' });
         }
 
-        // Cập nhật thông tin mật khẩu
         passwordEntry.name = name;
         passwordEntry.website = website || '';
         passwordEntry.username = username;
