@@ -132,7 +132,7 @@ export default function Login() {
                         <div className={`input-group company-group ${isManager ? 'visible' : 'hidden'}`}>
                             <i className="fas fa-building"></i>
                             <input
-                                type="text"
+                                type="password"
                                 placeholder="Company Secret Code"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}
